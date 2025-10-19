@@ -5,6 +5,7 @@ import util as u
 import typing as t
 import yt
 
+from time import time
 
 class PlaylistItem:
    """
@@ -22,7 +23,7 @@ class PlaylistItem:
 
       if isinstance(source, yt.PlaylistItem):
          self.title = source.title
-         self.channel_name = source.channel_title
+         self.channel_title = source.channel_title
          self.video_id = source.video_id
          self.smol_hash = u.smol_hash(source.id)
          return
@@ -66,8 +67,14 @@ class Playlist:
       self.id: str
       self.id_comment: list[str] = []
 
+      self.time: float
+      self.time_comment: list[str] = []
+
       self.items: list[PlaylistItem] = []
       if isinstance(source, yt.Playlist):
+         self.time = time()
+         self.title = source.title
+         self.id = source.id
          self.items = [PlaylistItem(item) for item in source.items]
          return
 
@@ -90,12 +97,25 @@ class Playlist:
          lines_and_comments.append((line, comment_above))
          comment_above = []
 
-      title, title_comment = lines_and_comments.pop(0)
-      self.title: str = u.deserialize(title)
+      raw_title, title_comment = lines_and_comments.pop(0)
+      title = u.deserialize(raw_title)
+      if not isinstance(title, str):
+         raise ValueError("Title must be a string!")
+      self.title: str = title
       self.title_comment = title_comment
 
-      id_, id_comment = lines_and_comments.pop(0)
-      self.id: str = u.deserialize(id_)
+      raw_id, id_comment = lines_and_comments.pop(0)
+      id_ = u.deserialize(raw_id)
+      if not isinstance(id_, str):
+         raise ValueError("id must be a string!")
+      self.id: str = id_
       self.id_comment = id_comment
+
+      raw_time, time_comment = lines_and_comments.pop(0)
+      time_ = u.deserialize(raw_time)
+      if not isinstance(time_, float):
+         raise ValueError("id must be a string!")
+      self.time: float = time_
+      self.time_comment = time_comment
 
       self.items = [PlaylistItem(line, comment_above) for line, comment_above in lines_and_comments]
