@@ -19,11 +19,11 @@ def _pretty_prefix(v, prefix: str) -> str:
       for line in msg.split("\n")
    ])
 
-def start_group():
+def group_start():
    global _indent_level
    _indent_level += 1
 
-def end_group():
+def group_end():
    global _indent_level
    if _indent_level > 1:
       _indent_level -= 1
@@ -40,4 +40,4 @@ def warn(v):
    sys.stderr.write(_pretty_prefix(v, c.Fore.YELLOW + "WRN"))
 
 def error(v):
-   sys.stderr.write(_pretty_prefix(v, c.Fore.LIGHTRED_EX + "ERRs"))
+   sys.stderr.write(_pretty_prefix(v, c.Fore.LIGHTRED_EX + "ERR"))

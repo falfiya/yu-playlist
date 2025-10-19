@@ -98,15 +98,15 @@ class PlaylistItem:
       except Exception as e:
          l.error("An exception occurred during translation from YT.PlaylistItem")
          l.error(e)
-         l.start_group()
+         l.group_start()
          l.warn("YT.PlaylistItem was:")
 
-         l.start_group()
-         l.warn(u.serialize(yt_playlistitem))
-         l.end_group()
+         l.group_start()
+         l.warn(yt_playlistitem)
+         l.group_end()
 
          l.debug("Proceeding under the assumption that the video is private.")
-         l.end_group()
+         l.group_end()
          self.channel_title = None
 
    def set_position(self, position: int):
@@ -146,7 +146,8 @@ class Playlist:
       page_token = None
       accumulate = []
 
-      print(f"FETCH  | {self.title}")
+      l.info(self.title)
+      l.group_start()
 
       while True:
          req = yt.playlistItems().list(
@@ -167,12 +168,14 @@ class Playlist:
          before = len(accumulate)
          accumulate.extend(items)
          after = len(accumulate)
-         print(f"FETCH  | Playlist Item {before}-{after}")
+         l.info(f"Playlist Item [{before:>3}, {after:>3}]")
          page_token = res.get("nextPageToken")
          if page_token is None:
             break
 
-      return [PlaylistItem(i) for i in accumulate]
+      output = [PlaylistItem(i) for i in accumulate]
+      l.group_end()
+      return output
 
 
 def get_playlist(id: str) -> Playlist:
@@ -186,8 +189,8 @@ def my_playlists() -> list[Playlist]:
    page_token = None
    yt_playlists = []
 
-   l.info("Fetching playlists:")
-   l.start_group()
+   l.info("Fetching Playlists:")
+   l.group_start()
    while True:
       req = yt.playlists().list(
          part="snippet,contentDetails",
@@ -199,10 +202,11 @@ def my_playlists() -> list[Playlist]:
       before = len(yt_playlists)
       yt_playlists.extend(res["items"])
       after = len(yt_playlists)
-      l.info(f"{before} - {after}")
+      l.info(f"Playlist [{before:>2}, {after:>2}]")
       page_token = res.get("nextPageToken")
       if page_token is None:
          break
-   l.end_group()
 
-   return list(map(Playlist, yt_playlists))
+   output = list(map(Playlist, yt_playlists))
+   l.group_end()
+   return output
