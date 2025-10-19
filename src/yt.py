@@ -13,30 +13,20 @@ if TYPE_CHECKING:
 
 from util import (
    debug,
-   deserialize,
    left_align,
    serialize,
-   shortest_out_of_order_sublist,
    smol_hash,
    truncate,
 )
 
-
-class Thumbnail:
-   def __init__(self, yt_thumbnail: YT.Thumbnail):
-      self.url: str = yt_thumbnail["url"]
-      self.width: str = yt_thumbnail["width"]
-      self.height: str = yt_thumbnail["height"]
-
-
 class Thumbnails:
    def __init__(self, yt_thumbnails: YT.ThumbnailDetails):
       self.present: list[str] = []
-      self.default: Optional[Thumbnails.Thumbnail]
-      self.medium: Optional[Thumbnails.Thumbnail]
-      self.high: Optional[Thumbnails.Thumbnail]
-      self.standard: Optional[Thumbnails.Thumbnail]
-      self.maxres: Optional[Thumbnails.Thumbnail]
+      self.default: Optional[YT.Thumbnail]
+      self.medium: Optional[YT.Thumbnail]
+      self.high: Optional[YT.Thumbnail]
+      self.standard: Optional[YT.Thumbnail]
+      self.maxres: Optional[YT.Thumbnail]
 
       for attr in ["default", "medium", "high", "standard", "maxres"]:
          opaque: Optional[YT.Thumbnail] = yt_thumbnails.get(attr)
@@ -44,25 +34,26 @@ class Thumbnails:
             setattr(self, attr, None)
          else:
             self.present.append(attr)
-            setattr(self, attr, Thumbnail(opaque))
+            setattr(self, attr, opaque)
 
    def __repr__(self):
       return f"Thumbnails{self.present}"
 
-
 class PlaylistItem:
-   def __init__(self, client: Client, yt_playlistitem: YT.PlaylistItem):
-      self.client = client
+   def __init__(self, yt: YT.YouTubeResource, yt_playlistitem: YT.PlaylistItem):
+      self.yt = yt
+      self.is_private = False
+
+      self.id: str = yt_playlistitem["id"]
+      snippet = yt_playlistitem["snippet"]
+
+      self.title: str = snippet["title"]
+      self.position: int = snippet["position"]
+      self.playlist_id: str = snippet["playlistId"]
+      self.video_id: str = snippet["resourceId"]["videoId"]
 
       try:
-         self.id: str = yt_playlistitem["id"]
-         snippet = yt_playlistitem["snippet"]
-
-         self.title: str = snippet["title"]
-         self.position: int = snippet["position"]
-         self.playlist_id: str = snippet["playlistId"]
-         self.video_id: str = snippet["resourceId"]["videoId"]
-         self.channel_title: str = snippet["videoOwnerChannelTitle"]
+         self.channel_title: Optional[str] = snippet["videoOwnerChannelTitle"]
       except Exception as e:
          debug(
             "An exception occurred when trying to translate from yt_playlistitem into PlaylistItem",
@@ -77,10 +68,27 @@ class PlaylistItem:
          )
          self.channel_title = "Private"
 
+   def set_position(self, position: int):
+      req = self.yt.playlistItems().update(
+         part="snippet",
+         body={
+            "id": self.id,
+            "snippet": {
+               "playlistId": self.id,
+               "position": position,
+               "resourceId": {
+                  "kind": "youtube#video",
+                  "videoId": self.video_id,
+               },
+            },
+         },
+      )
+      req.execute()
+
 
 class Playlist:
-   def __init__(self, client: Client, yt_playlist: YT.Playlist):
-      self.client = client
+   def __init__(self, yt: YT.YouTubeResource, yt_playlist: YT.Playlist):
+      self.yt = yt
 
       self.id: str = yt_playlist["id"]
       self.length: int = yt_playlist["contentDetails"]["itemCount"]
@@ -92,7 +100,7 @@ class Playlist:
       self.title: str = snippet["title"]
       self.desc: str = snippet["description"]
 
-      self.thumbnails = Thumbnails(snippet["thumbnails"])
+      self.thumbnails: YT.ThumbnailDetails = snippet["thumbnails"]
 
    @cached_property
    def items(self) -> list[PlaylistItem]:
@@ -102,7 +110,7 @@ class Playlist:
       print(f"FETCH  | {self.title}")
 
       while True:
-         req = self.client.yt.playlistItems().list(
+         req = self.yt.playlistItems().list(
             playlistId=self.id,
             part="id,snippet",
             maxResults=50,
@@ -125,7 +133,7 @@ class Playlist:
          if page_token is None:
             break
 
-      return [PlaylistItem(self.client, i) for i in accumulate]
+      return [PlaylistItem(self.yt, i) for i in accumulate]
 
    def jsonl(self) -> str:
       cols: tuple[list[str], list[str], list[str], list[str]] = (
@@ -158,7 +166,7 @@ class Playlist:
       return jsonl_out
 
    def friendly_jsonl(self) -> str:
-      cols: tuple[list[str], list[str], list[str]] = (
+      cols: tuple[list[str], list[str], list[str], list[str]] = (
          [serialize("Title")],
          [serialize("Channel")],
          [serialize("Video ID")],
@@ -169,9 +177,10 @@ class Playlist:
          cols[0].append(serialize(_title))
 
          _channel_title = i.channel_title
-         if _channel_title.endswith(" - Topic"):
-            _channel_title = _channel_title[: -len(" - Topic")]
-         _channel_title = truncate(_channel_title, max_len=20)
+         if _channel_title is not None:
+            if _channel_title.endswith(" - Topic"):
+               _channel_title = _channel_title[: -len(" - Topic")]
+            _channel_title = truncate(_channel_title, max_len=20)
          cols[1].append(serialize(_channel_title))
 
          cols[2].append(serialize(i.video_id))
@@ -188,139 +197,6 @@ class Playlist:
          jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
 
       return jsonl_out
-
-
-class ShadowPlaylistItem:
-   """
-   Incomplete PlaylistItem which contains only as much information as is in the
-   friendly jsonl file.
-   """
-
-   def __init__(self, jsonstr):
-      obj = deserialize(jsonstr)
-      self.title = obj[0]
-      self.channel_name = obj[1]
-      self.video_id = obj[2]
-      self.smol_hash = obj[3]
-      self.actual: Optional[PlaylistItem] = None
-
-   def reify(self, actual: PlaylistItem) -> bool:
-      """
-      If the actual PlaylistItem id matches the smol_hash, the
-      ShadowPlaylistItem accepts it.
-      """
-      if smol_hash(actual.id) == self.smol_hash:
-         self.actual = actual
-         return True
-      else:
-         return False
-
-   @property
-   def reified(self) -> bool:
-      return self.actual is not None
-
-   @property
-   def id(self) -> str:
-      if self.actual is None:
-         raise ValueError("ShadowPlaylistItem is not reified!")
-      return self.actual.id
-
-   def __repr__(self) -> str:
-      return f"{self.title}#{self.video_id}"
-
-
-class ShadowPlaylist:
-   """
-   The Playlist file that we are going to try to mirror.
-   """
-
-   def __init__(self, client: Client, jsonl: list[str]):
-      self.client = client
-
-      sanitized_lines = []
-      for line in jsonl:
-         try:
-            comment_start = line.index("//")
-            line_without_comment = line[:comment_start].strip()
-            if line_without_comment != "":
-               sanitized_lines.append(line_without_comment)
-         except ValueError:
-            sanitized_lines.append(line)
-
-      self.title = deserialize(sanitized_lines.pop(0), str)
-      self.id = deserialize(sanitized_lines.pop(0), str)
-      sanitized_lines.pop(0) # this is the column title line
-
-      self.items = list(map(ShadowPlaylistItem, sanitized_lines))
-      """
-      Desired ordering of Video IDs
-      """
-
-   def summon(self, position: int):
-      shadow_item = self.items[position]
-      req = self.client.yt.playlistItems().update(
-         part="snippet",
-         body={
-            "id": shadow_item.id,
-            "snippet": {
-               "playlistId": self.id,
-               "position": position,
-               "resourceId": {
-                  "kind": "youtube#video",
-                  "videoId": shadow_item.video_id,
-               },
-            },
-         },
-      )
-      req.execute()
-
-   def mirror_wrt(self, actual_playlist: Playlist):
-      if actual_playlist.id != self.id:
-         raise ValueError("Playlist IDs must be the same!")
-
-      # reify all shadow playlist items
-      smol_hash2shadow = {shadow.smol_hash: shadow for shadow in self.items}
-      smol_hash2actual = {smol_hash(actual.id): actual for actual in actual_playlist.items}
-      for smol_hash_value in smol_hash2shadow:
-         smol_hash2shadow[smol_hash_value].reify(smol_hash2actual[smol_hash_value])
-      for shadow in self.items:
-         if not shadow.reified:
-            raise ValueError(f"Could not reify {shadow.title}!")
-
-      id2actual = {actual.id: actual for actual in actual_playlist.items}
-      id2ord = {item.id: i for i, item in enumerate(self.items)}
-
-      actual_ids = {actual.id for actual in actual_playlist.items}
-      expected_ids = {expected.id for expected in self.items}
-      # verify that we're not missing any in the shadow
-      for missing in actual_ids - expected_ids:
-         raise ValueError(f"Missing {id2actual[missing].title}#{missing} from shadow!")
-      # also we don't want to have any extra
-      for expected in self.items:
-         if expected.id not in [real.id for real in actual_playlist.items]:
-            raise ValueError(f"Extra {expected.id} in shadow!")
-      del actual_ids
-      del expected_ids
-
-      out_of_order_positions = shortest_out_of_order_sublist(
-         [id2ord[actual.id] for actual in actual_playlist.items],
-      )
-      for position in out_of_order_positions:
-         self.summon(position)
-         if position > 0:
-            print(f"SORT   | {self.items[position - 1].title} ->")
-         else:
-            print("SORT   |")
-         print(f"SORT   | {self.items[position].title}", end="")
-
-         if position < len(self.items):
-            print(" ->")
-            print(f"SORT   | {self.items[position + 1].title}")
-         else:
-            print("SORT   #")
-
-         print("SORT   #")
-
 
 class Client:
    from config import PORT, SCOPES, TOKEN_PATH
@@ -367,7 +243,7 @@ class Client:
       #
       # sybau
       os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-      self.yt = googleapiclient.discovery.build(
+      self.yt: YT.YouTubeResource = googleapiclient.discovery.build(
          "youtube",
          "v3",
          credentials=self.credentials(),
@@ -393,4 +269,4 @@ class Client:
          if page_token is None:
             break
 
-      return [Playlist(self, p) for p in yt_playlists]
+      return [Playlist(self.yt, p) for p in yt_playlists]
