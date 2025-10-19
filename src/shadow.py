@@ -45,36 +45,20 @@ class PlaylistItem:
             self.inline_comment = more_line
          else:
             raise ValueError(f"Unexpected text {u.serialize(more_line2)} after {self.title}!")
-
-         if len(above_comment) > 0:
-            l.info(f"{self.title} - {self.channel_name}")
-            l.group_start()
-            for line in above_comment:
-               l.debug(line)
-            l.group_end()
-         return
-
-      raise TypeError(f"Unexpected type {type(source)}!")
+      else:
+         raise TypeError(f"Unexpected type {type(source)}!")
 
    def __repr__(self) -> str:
       return f"{self.title} - {self.channel_title}"
 
 class Playlist:
-   """
-   The Playlist file that we are going to try to mirror.
-   """
-
-   def __init__(self, source: t.Union[t.Sequence[str], yt.Playlist]):
+   def __init__(self, source: t.Union[str, yt.Playlist]):
       # This can't be None because I'm only archiving my own playlists.
       # It can't be set to private!
       self.title: str
-      self.title_comment: list[str] = []
-
+      self.playlist_comment: list[str] = []
       self.id: str
-      self.id_comment: list[str] = []
-
       self.time: float
-      self.time_comment: list[str] = []
 
       self.items: list[PlaylistItem] = []
       if isinstance(source, yt.Playlist):
@@ -84,47 +68,47 @@ class Playlist:
          self.items = [PlaylistItem(item) for item in source.items]
          return
 
-      # thank you, Guido van Rossum
-      #if isinstance(source, t.Sequence[str]):
-      # source is jsonl
+      if isinstance(source, str):
+         jsonl = [line.strip() for line in source.splitlines()]
+         l.info(jsonl)
 
-      lines_and_comments: list[tuple[str, list[str]]] = []
-      comment_above = []
-      for line in source:
-         line = line.strip()
+         title = u.deserialize(jsonl.pop(0))
+         if not isinstance(title, str):
+            raise ValueError("Title must be a string!")
+         self.title: str = title
 
-         if line == "":
-            continue
+         # I will allow a playlist comment on the second line.
+         while jsonl[0].startswith("//"):
+            self.playlist_comment.append(jsonl.pop(0))
 
-         if line.startswith("//"):
-            comment_above.append(line)
-            continue
+         id_ = u.deserialize(jsonl.pop(0))
+         if not isinstance(id_, str):
+            raise ValueError("id must be a string!")
+         self.id: str = id_
 
-         lines_and_comments.append((line, comment_above))
+         time_ = u.deserialize(jsonl.pop(0))
+         if not isinstance(time_, float):
+            raise ValueError("time must be a float!")
+         self.time: float = time_
+
+         lines_and_comments: list[tuple[str, list[str]]] = []
          comment_above = []
+         for line in jsonl:
+            line = line.strip()
 
-      raw_title, title_comment = lines_and_comments.pop(0)
-      title = u.deserialize(raw_title)
-      if not isinstance(title, str):
-         raise ValueError("Title must be a string!")
-      self.title: str = title
-      self.title_comment = title_comment
+            if line == "":
+               continue
 
-      raw_id, id_comment = lines_and_comments.pop(0)
-      id_ = u.deserialize(raw_id)
-      if not isinstance(id_, str):
-         raise ValueError("id must be a string!")
-      self.id: str = id_
-      self.id_comment = id_comment
+            if line.startswith("//"):
+               comment_above.append(line)
+               continue
 
-      raw_time, time_comment = lines_and_comments.pop(0)
-      time_ = u.deserialize(raw_time)
-      if not isinstance(time_, float):
-         raise ValueError("id must be a string!")
-      self.time: float = time_
-      self.time_comment = time_comment
+            lines_and_comments.append((line, comment_above))
+            comment_above = []
+         self.items = [PlaylistItem(line, comment_above) for line, comment_above in lines_and_comments]
+      else:
+         raise TypeError(f"Unexpected type {type(source)}!")
 
-      self.items = [PlaylistItem(line, comment_above) for line, comment_above in lines_and_comments]
 
    def jsonl(self) -> str:
       cols: tuple[list[str], list[str], list[str], list[str]] = (
@@ -139,17 +123,16 @@ class Playlist:
          cols[1].append(u.serialize(i.channel_title))
          cols[2].append(u.serialize(i.video_id))
          cols[3].append(u.serialize(i.smol_hash))
+
       for col in cols:
          u.left_align(col)
 
       jsonl_out = ""
-      jsonl_out += "".join(line + "\n" for line in self.title_comment)
       jsonl_out += u.serialize(self.title) + "\n"
-      jsonl_out += "".join(line + "\n" for line in self.id_comment)
       jsonl_out += u.serialize(self.id) + "\n"
-      jsonl_out += "".join(line + "\n" for line in self.time_comment)
       jsonl_out += u.serialize(self.time) + "\n"
-      for i in range(0, len(self.items)):
+
+      for i in range(0, len(cols[0])):
          jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
 
       return jsonl_out
@@ -158,12 +141,13 @@ class Playlist:
       """
       Does some truncation that would otherwise not happen.
       """
-      cols: tuple[list[str], list[str], list[str], list[str]] = (
-         [u.serialize("Title")],
-         [u.serialize("Channel")],
-         [u.serialize("Video ID")],
-         [u.serialize("Smol Hash~")],
-      )
+      jsonl_out = ""
+      jsonl_out += u.serialize(self.title) + "\n"
+      jsonl_out += "".join(line + "\n" for line in self.playlist_comment)
+      jsonl_out += u.serialize(self.id) + "\n"
+      jsonl_out += u.serialize(self.time) + "\n"
+
+      cols: tuple[list[str], list[str], list[str], list[str]] = ([], [], [], [])
       for i in self.items:
          _title = u.truncate(i.title, max_len=40)
          cols[0].append(u.serialize(_title))
@@ -182,14 +166,11 @@ class Playlist:
       for col in cols:
          u.left_align(col)
 
-      jsonl_out = ""
-      jsonl_out += "".join(line + "\n" for line in self.title_comment)
-      jsonl_out += u.serialize(self.title) + "\n"
-      jsonl_out += "".join(line + "\n" for line in self.id_comment)
-      jsonl_out += u.serialize(self.id) + "\n"
-      jsonl_out += "".join(line + "\n" for line in self.time_comment)
-      jsonl_out += u.serialize(self.time) + "\n"
-      for i in range(0, len(cols[0])):
-         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
+      for i, item in enumerate(self.items):
+         jsonl_out += "".join(line + "\n" for line in item.above_comment)
+         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]"
+         if item.inline_comment:
+            jsonl_out += item.inline_comment
+         jsonl_out += "\n"
 
       return jsonl_out

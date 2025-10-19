@@ -96,13 +96,13 @@ class PlaylistItem:
       try:
          self.channel_title: t.Optional[str] = snippet["videoOwnerChannelTitle"]
       except Exception as e:
-         l.error("An exception occurred during translation from YT.PlaylistItem")
-         l.error(e)
+         l.debug("An exception occurred during translation from YT.PlaylistItem")
+         l.debug(e)
          l.group_start()
-         l.warn("YT.PlaylistItem was:")
+         l.debug("YT.PlaylistItem was:")
 
          l.group_start()
-         l.warn(yt_playlistitem)
+         l.debug(yt_playlistitem)
          l.group_end()
 
          l.debug("Proceeding under the assumption that the video is private.")
@@ -125,6 +125,9 @@ class PlaylistItem:
          },
       )
       req.execute()
+
+   def __repr__(self) -> str:
+      return f"{self.title} - {self.channel_title}"
 
 
 class Playlist:

@@ -4,6 +4,8 @@ import shadow
 import util as u
 import yt
 import config
+import os
+import log as l
 
 from pathvalidate import sanitize_filename
 
@@ -36,8 +38,9 @@ class Playlist:
          self.friendly_file = u.oopen(friendly_filepath)
 
       try:
-         self.shadow_playlist = shadow.Playlist(self.friendly_file.readlines())
-      except Exception:
+         self.shadow_playlist = shadow.Playlist(self.friendly_file.read())
+      except Exception as e:
+         l.warn(e)
          # Couldn't parse the shadow file. Let's write another one.
          self.shadow_playlist = shadow.Playlist(self.yt_playlist)
          self.write()
@@ -53,7 +56,7 @@ class Playlist:
    @property
    def yt_playlist(self) -> yt.Playlist:
       if self._yt_playlist is None:
-         self._yt_playlist = yt.get_playlist(self.id)
+         self._yt_playlist = yt.get_playlist(self.shadow_playlist.id)
       return self._yt_playlist
 
    def write(self):
@@ -62,6 +65,10 @@ class Playlist:
       self.friendly_file.seek(0)
       self.friendly_file.write(self.shadow_playlist.friendly_jsonl())
 
+   def close(self):
+      if self.full_file:
+         self.full_file.close()
+      self.friendly_file.close()
 
    def _init_diff(self):
       self._shadow_set: t.Set[str] = set()
@@ -151,4 +158,18 @@ class Playlist:
 
       return [self.yt_shadow_position_backwards[pos] for pos in out_of_order_positions]
 
+
+def my_playlists_online() -> list[Playlist]:
    return [Playlist(yt_playlist=p) for p in yt.my_playlists()]
+
+def my_playlist_files() -> list[str]:
+   return [filename[:-6] for filename in os.listdir(config.PLAYLISTS_PATH) if filename.endswith(".jsonl")]
+
+def get_playlist_offline(filename: str) -> Playlist:
+   return Playlist(friendly_filepath=f"{config.PLAYLISTS_PATH}/{filename}.jsonl")
+
+def my_playlists_offline() -> list[Playlist]:
+   return [
+      Playlist(friendly_filepath=f"{config.PLAYLISTS_PATH}/{filename}")
+      for filename in my_playlist_files()
+   ]
