@@ -70,7 +70,6 @@ class Playlist:
 
       if isinstance(source, str):
          jsonl = [line.strip() for line in source.splitlines()]
-         l.info(jsonl)
 
          title = u.deserialize(jsonl.pop(0))
          if not isinstance(title, str):
