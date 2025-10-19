@@ -2,6 +2,16 @@
 
 ![](./misc/icon.png)
 
-Lets you edit a YouTube playlist like it was text.
+*Edit a YouTube playlist like it was text.*
 
-There are no concurrency guarantees or anything really.
+The best interface is no interface:
+
+```jsonl
+"Playlist Title"
+// Optional Comment
+// It can be 0 or more lines
+"playlist.id"
+00000.0000
+// Comments can be added on top of each track
+["Rich Man", "aespa", "WAQ5_7YFAVo", "73PNDXNHGL"] // or inline if you want
+```
