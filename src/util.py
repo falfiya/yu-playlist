@@ -2,12 +2,12 @@ import os
 import base64
 import hashlib
 import json
-import typing
+import typing as t
 from bisect import bisect_left
 
 import wcwidth
 
-T = typing.TypeVar("T")
+T = t.TypeVar("T")
 
 DEBUG = False
 
@@ -24,9 +24,8 @@ def debug(x, start=""):
          print(quote(x, start=start))
 
 
-def deserialize(s: str, _: typing.Type[T] = None) -> T:
+def deserialize(s: str):
    return json.loads(s)
-
 
 def serialize(x):
    return json.dumps(x, ensure_ascii=False)

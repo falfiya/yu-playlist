@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
-import time
+import typing as t
 from functools import cached_property
-from typing import TYPE_CHECKING, Optional
 
 import googleapiclient.discovery
 from google.oauth2.credentials import Credentials
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
    import googleapiclient._apis.youtube.v3 as YT
 
 from util import (
@@ -22,14 +21,14 @@ from util import (
 class Thumbnails:
    def __init__(self, yt_thumbnails: YT.ThumbnailDetails):
       self.present: list[str] = []
-      self.default: Optional[YT.Thumbnail]
-      self.medium: Optional[YT.Thumbnail]
-      self.high: Optional[YT.Thumbnail]
-      self.standard: Optional[YT.Thumbnail]
-      self.maxres: Optional[YT.Thumbnail]
+      self.default: t.Optional[YT.Thumbnail]
+      self.medium: t.Optional[YT.Thumbnail]
+      self.high: t.Optional[YT.Thumbnail]
+      self.standard: t.Optional[YT.Thumbnail]
+      self.maxres: t.Optional[YT.Thumbnail]
 
       for attr in ["default", "medium", "high", "standard", "maxres"]:
-         opaque: Optional[YT.Thumbnail] = yt_thumbnails.get(attr)
+         opaque: t.Optional[YT.Thumbnail] = yt_thumbnails.get(attr)
          if opaque is None:
             setattr(self, attr, None)
          else:
