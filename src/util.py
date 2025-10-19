@@ -31,6 +31,10 @@ def deserialize(s: str, _: typing.Type[T] = None) -> T:
 def serialize(x):
    return json.dumps(x, ensure_ascii=False)
 
+_default_decoder = json.JSONDecoder()
+def deserialize_raw(s: str, _: t.Optional[t.Type[T]] = None) -> tuple[T, str]:
+   val, last_idx = _default_decoder.raw_decode(s)
+   return val, s[last_idx:]
 
 def better_width(s: str) -> int:
    length = 0.0
