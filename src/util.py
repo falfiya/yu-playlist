@@ -72,10 +72,6 @@ def truncate(s: str, max_len: int) -> str:
 def smol_hash(s: str) -> str:
    return base64.b32encode(hashlib.sha256(s.encode()).digest()).decode()[:10]
 
-def mkdir(p: str):
-   os.makedirs("playlists/in/full", exist_ok=True)
-
-
 def longest_increasing_subsequence(unsorted: list[int]) -> list[int]:
    if len(unsorted) < 2:
       return unsorted
