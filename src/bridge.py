@@ -5,7 +5,6 @@ import util as u
 import yt
 import config
 
-from time import time
 from pathvalidate import sanitize_filename
 
 
@@ -21,7 +20,7 @@ class Playlist:
       """
       self.id: str
       self._yt_playlist: t.Optional[yt.Playlist] = None
-      self.shadow_playlist: t.Optional[shadow.Playlist] = None
+      self.shadow_playlist: shadow.Playlist
 
       if yt_playlist is None and friendly_filepath is None:
          raise ValueError("Both cannot be None!")
@@ -40,7 +39,8 @@ class Playlist:
          self.shadow_playlist = shadow.Playlist(self.friendly_file.readlines())
       except Exception:
          # Couldn't parse the shadow file. Let's write another one.
-         self.friendly_file.write(self.friendly_jsonl())
+         self.shadow_playlist = shadow.Playlist(self.yt_playlist)
+         self.write()
 
    def close(self):
       if self.full_file:
@@ -53,68 +53,11 @@ class Playlist:
          self._yt_playlist = yt.get_playlist(self.id)
       return self._yt_playlist
 
-   def jsonl(self) -> str:
-      cols: tuple[list[str], list[str], list[str], list[str]] = (
-         [u.serialize("Video Title")],
-         [u.serialize("Channel Name")],
-         [u.serialize("Video ID")],
-         [u.serialize("Playlist Item ID")],
-      )
-      items = self.yt_playlist.items
-      epoch = time()
-      for i in items:
-         cols[0].append(u.serialize(i.title))
-         cols[1].append(u.serialize(i.channel_title))
-         cols[2].append(u.serialize(i.video_id))
-         cols[3].append(u.serialize(i.id))
-      for col in cols:
-         u.left_align(col)
-
-      info = {
-         "playlist_id": self.id,
-         "last_updated_unix": epoch,
-      }
-
-      jsonl_out = ""
-      jsonl_out += u.serialize(self.yt_playlist.title) + "\n"
-      jsonl_out += u.serialize(info) + "\n"
-      for i in range(0, len(items)):
-         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
-
-      return jsonl_out
-
-   def friendly_jsonl(self) -> str:
-      cols: tuple[list[str], list[str], list[str], list[str]] = (
-         [u.serialize("Title")],
-         [u.serialize("Channel")],
-         [u.serialize("Video ID")],
-         [u.serialize("Smol Hash~")],
-      )
-      for i in self.yt_playlist.items:
-         _title = u.truncate(i.title, max_len=40)
-         cols[0].append(u.serialize(_title))
-
-         _channel_title = i.channel_title
-         if _channel_title is not None:
-            if _channel_title.endswith(" - Topic"):
-               _channel_title = _channel_title[: -len(" - Topic")]
-            _channel_title = u.truncate(_channel_title, max_len=20)
-         cols[1].append(u.serialize(_channel_title))
-
-         cols[2].append(u.serialize(i.video_id))
-
-         cols[3].append(u.serialize(u.smol_hash(i.id)))
-
-      for col in cols:
-         u.left_align(col)
-
-      jsonl_out = ""
-      jsonl_out += u.serialize(self.yt_playlist.title) + "\n"
-      jsonl_out += u.serialize(self.id) + "\n"
-      for i in range(0, len(cols[0])):
-         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
-
-      return jsonl_out
+   def write(self):
+      self.full_file.seek(0)
+      self.full_file.write(self.shadow_playlist.jsonl())
+      self.friendly_file.seek(0)
+      self.friendly_file.write(self.shadow_playlist.friendly_jsonl())
 
 def my_playlists() -> list[Playlist]:
    return [Playlist(yt_playlist=p) for p in yt.my_playlists()]

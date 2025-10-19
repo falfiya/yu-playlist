@@ -4,6 +4,7 @@
 import util as u
 import typing as t
 import yt
+import log as l
 
 from time import time
 
@@ -44,6 +45,13 @@ class PlaylistItem:
             self.inline_comment = more_line
          else:
             raise ValueError(f"Unexpected text {u.serialize(more_line2)} after {self.title}!")
+
+         if len(above_comment) > 0:
+            l.info(f"{self.title} - {self.channel_name}")
+            l.group_start()
+            for line in above_comment:
+               l.debug(line)
+            l.group_end()
          return
 
       raise TypeError(f"Unexpected type {type(source)}!")
@@ -119,3 +127,71 @@ class Playlist:
       self.time_comment = time_comment
 
       self.items = [PlaylistItem(line, comment_above) for line, comment_above in lines_and_comments]
+
+   def jsonl(self) -> str:
+      cols: tuple[list[str], list[str], list[str], list[str]] = (
+         [u.serialize("Video Title")],
+         [u.serialize("Channel Title")],
+         [u.serialize("Video ID")],
+         [u.serialize("Smol Hash~")],
+      )
+
+      for i in self.items:
+         cols[0].append(u.serialize(i.title))
+         cols[1].append(u.serialize(i.channel_title))
+         cols[2].append(u.serialize(i.video_id))
+         cols[3].append(u.serialize(i.smol_hash))
+      for col in cols:
+         u.left_align(col)
+
+      jsonl_out = ""
+      jsonl_out += "".join(line + "\n" for line in self.title_comment)
+      jsonl_out += u.serialize(self.title) + "\n"
+      jsonl_out += "".join(line + "\n" for line in self.id_comment)
+      jsonl_out += u.serialize(self.id) + "\n"
+      jsonl_out += "".join(line + "\n" for line in self.time_comment)
+      jsonl_out += u.serialize(self.time) + "\n"
+      for i in range(0, len(self.items)):
+         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
+
+      return jsonl_out
+
+   def friendly_jsonl(self) -> str:
+      """
+      Does some truncation that would otherwise not happen.
+      """
+      cols: tuple[list[str], list[str], list[str], list[str]] = (
+         [u.serialize("Title")],
+         [u.serialize("Channel")],
+         [u.serialize("Video ID")],
+         [u.serialize("Smol Hash~")],
+      )
+      for i in self.items:
+         _title = u.truncate(i.title, max_len=40)
+         cols[0].append(u.serialize(_title))
+
+         _channel_title = i.channel_title
+         if _channel_title is not None:
+            if _channel_title.endswith(" - Topic"):
+               _channel_title = _channel_title[: -len(" - Topic")]
+            _channel_title = u.truncate(_channel_title, max_len=20)
+         cols[1].append(u.serialize(_channel_title))
+
+         cols[2].append(u.serialize(i.video_id))
+
+         cols[3].append(u.serialize(i.smol_hash))
+
+      for col in cols:
+         u.left_align(col)
+
+      jsonl_out = ""
+      jsonl_out += "".join(line + "\n" for line in self.title_comment)
+      jsonl_out += u.serialize(self.title) + "\n"
+      jsonl_out += "".join(line + "\n" for line in self.id_comment)
+      jsonl_out += u.serialize(self.id) + "\n"
+      jsonl_out += "".join(line + "\n" for line in self.time_comment)
+      jsonl_out += u.serialize(self.time) + "\n"
+      for i in range(0, len(cols[0])):
+         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
+
+      return jsonl_out
