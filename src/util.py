@@ -16,6 +16,17 @@ def quote(x, start) -> str:
    return "\n".join([start + line for line in f"{x}".split("\n")])
 
 
+def oopen(path: str):
+   """
+   Obvious open file for read and write, creating if not exists. Both offsets at 0.
+   """
+   os.makedirs(os.path.dirname(path), exist_ok=True)
+
+   if not os.path.exists(path):
+      open(path, "x").close()
+
+   return open(path, "r+", encoding="utf-8")
+
 def debug(x, start=""):
    if DEBUG:
       if start == "":
