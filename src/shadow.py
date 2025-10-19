@@ -16,7 +16,7 @@ class PlaylistItem:
 
    def __init__(self, source: t.Union[str, yt.PlaylistItem], above_comment: list[str] = []):
       self.title: str
-      self.channel_name: t.Optional[str]
+      self.channel_title: t.Optional[str]
       self.video_id: str
       self.smol_hash: str
       self.above_comment = above_comment
@@ -33,7 +33,7 @@ class PlaylistItem:
          # source is a single line of json
          obj, more_line = u.deserialize_raw(source, tuple[str, str, str, str])
          self.title = obj[0]
-         self.channel_name = obj[1]
+         self.channel_title = obj[1]
          self.video_id = obj[2]
          self.smol_hash = obj[3]
 
@@ -57,9 +57,7 @@ class PlaylistItem:
       raise TypeError(f"Unexpected type {type(source)}!")
 
    def __repr__(self) -> str:
-      return f"{self.title}#{self.video_id}"
-
-
+      return f"{self.title} - {self.channel_title}"
 
 class Playlist:
    """
