@@ -10,12 +10,55 @@ from google.oauth2.credentials import Credentials
 if t.TYPE_CHECKING:
    import googleapiclient._apis.youtube.v3 as YT
 
-from util import (
-   debug,
-   left_align,
-   serialize,
-   smol_hash,
-   truncate,
+import util as u
+import log as l
+import config
+
+def _secret_filename() -> str:
+   for file in os.listdir("secrets"):
+      if file.startswith("client_secret") and file.endswith(".json"):
+         return f"secrets/{file}"
+
+   raise ValueError("Ahh, AHHHHH!")
+
+def _credentials() -> Credentials:
+   creds = None
+   if os.path.exists(config.TOKEN_PATH):
+      creds = Credentials.from_authorized_user_file(
+         filename=config.TOKEN_PATH,
+         scopes=config.SCOPES,
+      )
+
+   if creds and creds.valid:
+      return creds
+
+   if creds and creds.expired and creds.refresh_token:
+      from google.auth.transport.requests import Request
+
+      creds.refresh(Request())
+   else:
+      from google_auth_oauthlib.flow import InstalledAppFlow
+
+      flow = InstalledAppFlow.from_client_secrets_file(
+         client_secrets_file=_secret_filename(),
+         scopes=config.SCOPES,
+      )
+      creds = flow.run_local_server(port=config.PORT)
+
+   with open(config.TOKEN_PATH, "w") as token:
+      token.write(creds.to_json())
+
+   return creds
+
+# > Disable OAuthlib's HTTPS verification when running locally.
+# > *DO NOT* leave this option enabled in production.
+#
+# sybau
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+yt: YT.YouTubeResource = googleapiclient.discovery.build(
+   "youtube",
+   "v3",
+   credentials=_credentials(),
 )
 
 class Thumbnails:
@@ -39,8 +82,7 @@ class Thumbnails:
       return f"Thumbnails{self.present}"
 
 class PlaylistItem:
-   def __init__(self, yt: YT.YouTubeResource, yt_playlistitem: YT.PlaylistItem):
-      self.yt = yt
+   def __init__(self, yt_playlistitem: YT.PlaylistItem):
       self.is_private = False
 
       self.id: str = yt_playlistitem["id"]
@@ -52,23 +94,23 @@ class PlaylistItem:
       self.video_id: str = snippet["resourceId"]["videoId"]
 
       try:
-         self.channel_title: Optional[str] = snippet["videoOwnerChannelTitle"]
+         self.channel_title: t.Optional[str] = snippet["videoOwnerChannelTitle"]
       except Exception as e:
-         debug(
+         u.debug(
             "An exception occurred when trying to translate from yt_playlistitem into PlaylistItem",
             start="EXCEPT | ",
          )
-         debug(e, start="EXCEPT > ")
-         debug("yt_playlistitem was:", start="EXCEPT | ")
-         debug(serialize(yt_playlistitem), start="EXCEPT > ")
-         debug(
+         u.debug(e, start="EXCEPT > ")
+         u.debug("yt_playlistitem was:", start="EXCEPT | ")
+         u.debug(u.serialize(yt_playlistitem), start="EXCEPT > ")
+         u.debug(
             "I am assuming that's because the video is private, so I'll set channel to 'Private'",
             start="EXCEPT | ",
          )
-         self.channel_title = "Private"
+         self.channel_title = None
 
    def set_position(self, position: int):
-      req = self.yt.playlistItems().update(
+      req = yt.playlistItems().update(
          part="snippet",
          body={
             "id": self.id,
@@ -86,9 +128,7 @@ class PlaylistItem:
 
 
 class Playlist:
-   def __init__(self, yt: YT.YouTubeResource, yt_playlist: YT.Playlist):
-      self.yt = yt
-
+   def __init__(self, yt_playlist: YT.Playlist):
       self.id: str = yt_playlist["id"]
       self.length: int = yt_playlist["contentDetails"]["itemCount"]
 
@@ -109,7 +149,7 @@ class Playlist:
       print(f"FETCH  | {self.title}")
 
       while True:
-         req = self.yt.playlistItems().list(
+         req = yt.playlistItems().list(
             playlistId=self.id,
             part="id,snippet",
             maxResults=50,
@@ -132,140 +172,37 @@ class Playlist:
          if page_token is None:
             break
 
-      return [PlaylistItem(self.yt, i) for i in accumulate]
+      return [PlaylistItem(i) for i in accumulate]
 
-   def jsonl(self) -> str:
-      cols: tuple[list[str], list[str], list[str], list[str]] = (
-         [serialize("Video Title")],
-         [serialize("Channel Name")],
-         [serialize("Video ID")],
-         [serialize("Playlist Item ID")],
+
+def get_playlist(id: str) -> Playlist:
+   res = yt.playlists().list(part="snippet,contentDetails", mine=True, id=id).execute()
+   items = res["items"]
+   if len(items) == 0:
+      raise LookupError(f"Could not find playlist id {u.serialize(id)}!")
+   return Playlist(items[0])
+
+def my_playlists() -> list[Playlist]:
+   page_token = None
+   yt_playlists = []
+
+   l.info("Fetching playlists:")
+   l.start_group()
+   while True:
+      req = yt.playlists().list(
+         part="snippet,contentDetails",
+         maxResults=50,
+         mine=True,
+         pageToken=page_token,
       )
-      items = self.items
-      epoch = time.time()
-      for i in items:
-         cols[0].append(serialize(i.title))
-         cols[1].append(serialize(i.channel_title))
-         cols[2].append(serialize(i.video_id))
-         cols[3].append(serialize(i.id))
-      for col in cols:
-         left_align(col)
+      res = req.execute()
+      before = len(yt_playlists)
+      yt_playlists.extend(res["items"])
+      after = len(yt_playlists)
+      l.info(f"{before} - {after}")
+      page_token = res.get("nextPageToken")
+      if page_token is None:
+         break
+   l.end_group()
 
-      info = {
-         "playlist_id": self.id,
-         "last_updated_unix": epoch,
-      }
-
-      jsonl_out = ""
-      jsonl_out += serialize(self.title) + "\n"
-      jsonl_out += serialize(info) + "\n"
-      for i in range(0, len(self.items)):
-         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
-
-      return jsonl_out
-
-   def friendly_jsonl(self) -> str:
-      cols: tuple[list[str], list[str], list[str], list[str]] = (
-         [serialize("Title")],
-         [serialize("Channel")],
-         [serialize("Video ID")],
-         [serialize("Smol Hash~")],
-      )
-      for i in self.items:
-         _title = truncate(i.title, max_len=40)
-         cols[0].append(serialize(_title))
-
-         _channel_title = i.channel_title
-         if _channel_title is not None:
-            if _channel_title.endswith(" - Topic"):
-               _channel_title = _channel_title[: -len(" - Topic")]
-            _channel_title = truncate(_channel_title, max_len=20)
-         cols[1].append(serialize(_channel_title))
-
-         cols[2].append(serialize(i.video_id))
-
-         cols[3].append(serialize(smol_hash(i.id)))
-
-      for col in cols:
-         left_align(col)
-
-      jsonl_out = ""
-      jsonl_out += serialize(self.title) + "\n"
-      jsonl_out += serialize(self.id) + "\n"
-      for i in range(0, len(cols[0])):
-         jsonl_out += f"[{cols[0][i]}, {cols[1][i]}, {cols[2][i]}, {cols[3][i]}]\n"
-
-      return jsonl_out
-
-class Client:
-   from config import PORT, SCOPES, TOKEN_PATH
-
-   @staticmethod
-   def secret_filename() -> str:
-      for file in os.listdir("secrets"):
-         if file.startswith("client_secret") and file.endswith(".json"):
-            return f"secrets/{file}"
-
-   @staticmethod
-   def credentials() -> Credentials:
-      creds = None
-      if os.path.exists(Client.TOKEN_PATH):
-         creds = Credentials.from_authorized_user_file(
-            filename=Client.TOKEN_PATH,
-            scopes=Client.SCOPES,
-         )
-
-      if creds and creds.valid:
-         return creds
-
-      if creds and creds.expired and creds.refresh_token:
-         from google.auth.transport.requests import Request
-
-         creds.refresh(Request())
-      else:
-         from google_auth_oauthlib.flow import InstalledAppFlow
-
-         flow = InstalledAppFlow.from_client_secrets_file(
-            client_secrets_file=Client.secret_filename(),
-            scopes=Client.SCOPES,
-         )
-         creds = flow.run_local_server(port=Client.PORT)
-
-      with open(Client.TOKEN_PATH, "w") as token:
-         token.write(creds.to_json())
-
-      return creds
-
-   def __init__(self):
-      # > Disable OAuthlib's HTTPS verification when running locally.
-      # > *DO NOT* leave this option enabled in production.
-      #
-      # sybau
-      os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-      self.yt: YT.YouTubeResource = googleapiclient.discovery.build(
-         "youtube",
-         "v3",
-         credentials=self.credentials(),
-      )
-
-   def my_playlists(self) -> list[Playlist]:
-      page_token = None
-      yt_playlists = []
-
-      while True:
-         req = self.yt.playlists().list(
-            part="snippet,contentDetails",
-            maxResults=50,
-            mine=True,
-            pageToken=page_token,
-         )
-         res = req.execute()
-         before = len(yt_playlists)
-         yt_playlists.extend(res["items"])
-         after = len(yt_playlists)
-         print(f"FETCH  | Playlist {before} - {after}")
-         page_token = res.get("nextPageToken")
-         if page_token is None:
-            break
-
-      return [Playlist(self.yt, p) for p in yt_playlists]
+   return list(map(Playlist, yt_playlists))
