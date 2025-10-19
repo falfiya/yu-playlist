@@ -1,3 +1,4 @@
+import os
 import base64
 import hashlib
 import json
@@ -12,7 +13,7 @@ DEBUG = False
 
 
 def quote(x, start) -> str:
-   return "\n".join([start + line + "\n" for line in f"{x}".split("\n")])
+   return "\n".join([start + line for line in f"{x}".split("\n")])
 
 
 def debug(x, start=""):
@@ -65,27 +66,41 @@ def truncate(s: str, max_len: int) -> str:
 def smol_hash(s: str) -> str:
    return base64.b32encode(hashlib.sha256(s.encode()).digest()).decode()[:10]
 
+def mkdir(p: str):
+   os.makedirs("playlists/in/full", exist_ok=True)
+
 
 def longest_increasing_subsequence(unsorted: list[int]) -> list[int]:
-   if len(unsorted) == 0:
+   if len(unsorted) < 2:
       return unsorted
 
-   # best_sublist[1] is the best sublist of length 1.
-   best_sublists: list[list[int]] = []
-   # The list comprehension is only for illustrative purposes
+   best_sublists: list[list[int]] = [[unsorted[0]]]
+
+   # This is simply a convenience variable which always mirrors the last element
+   # of best_sublists. That is:
+   # ∀ i ∈ indexof best_sublists. best_sublists[i][-1] = best_sublists_ending[i]
+   #
+   # Invariant:
+   # ∀ i,j ∈ indexof best_sublists_ending where i < j.
+   #     best_sublists_ending[i] < best_sublists_ending[j]
+   #
+   # We update best_sublists_ending[i] from x₁ to x₂ IFF x₂ < x₁.
+   #
+   # The list comprehension is for illustrative purposes.
    best_sublists_ending: list[int] = [sublist[-1] for sublist in best_sublists]
 
-   for x in unsorted:
-      belongs = bisect_left(best_sublists_ending, x)
+   for x2 in unsorted[1:]:
+      belongs = bisect_left(best_sublists_ending, x2)
 
       if belongs == len(best_sublists_ending):
-         best_sublists_ending.append(x)
-         best_sublists.append(best_sublists_ending[:] + [x])
+         best_sublists_ending.append(x2)
+         best_sublists.append(best_sublists[-1] + [x2])
          continue
 
-      if x < best_sublists_ending[belongs]:
-         best_sublists_ending[belongs] = x
-         best_sublists[belongs] = best_sublists_ending[:belongs] + [x]
+      x1 = best_sublists_ending[belongs]
+      if x2 < x1:
+         best_sublists_ending[belongs] = x2
+         best_sublists[belongs] = best_sublists_ending[:belongs] + [x2]
 
    return best_sublists[-1]
 
