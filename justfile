@@ -6,5 +6,9 @@ save:
 post:
    uv run src/main.py post
 
+test:
+   uv run pytest --cov=src --cov-report=html
+   start htmlcov/index.html
+
 clear:
    rm --trash .debug
