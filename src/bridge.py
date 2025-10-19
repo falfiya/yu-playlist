@@ -3,6 +3,7 @@ import typing as t
 import shadow
 import util as u
 import yt
+import config
 
 from time import time
 from pathvalidate import sanitize_filename
@@ -27,9 +28,9 @@ class Playlist:
 
       if yt_playlist is not None:
          self.id = yt_playlist.id
-         self.full_file = u.oopen(f"playlists/full/{yt_playlist.id}.jsonl")
+         self.full_file = u.oopen(f"{config.PLAYLISTS_PATH}/full/{yt_playlist.id}.jsonl")
          if friendly_filepath is None:
-            self.friendly_file = u.oopen(f"playlists/{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl")
+            self.friendly_file = u.oopen(f"{config.PLAYLISTS_PATH}/{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl")
          self._yt_playlist = yt_playlist
 
       if friendly_filepath is not None:

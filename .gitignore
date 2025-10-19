@@ -9,6 +9,4 @@ __pycache__/
 /.venv
 
 # yu-playlist
-
 /secrets/
-/playlists/
