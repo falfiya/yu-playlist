@@ -179,7 +179,7 @@ class Playlist:
 
 
 def get_playlist(id: str) -> Playlist:
-   res = yt.playlists().list(part="snippet,contentDetails", mine=True, id=id).execute()
+   res = yt.playlists().list(part="snippet,contentDetails", id=id).execute()
    items = res["items"]
    if len(items) == 0:
       raise LookupError(f"Could not find playlist id {u.serialize(id)}!")
