@@ -27,14 +27,6 @@ def oopen(path: str):
 
    return open(path, "r+", encoding="utf-8")
 
-def debug(x, start=""):
-   if DEBUG:
-      if start == "":
-         print(x)
-      else:
-         print(quote(x, start=start))
-
-
 def deserialize(s: str):
    return json.loads(s)
 

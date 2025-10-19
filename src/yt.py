@@ -96,17 +96,17 @@ class PlaylistItem:
       try:
          self.channel_title: t.Optional[str] = snippet["videoOwnerChannelTitle"]
       except Exception as e:
-         u.debug(
-            "An exception occurred when trying to translate from yt_playlistitem into PlaylistItem",
-            start="EXCEPT | ",
-         )
-         u.debug(e, start="EXCEPT > ")
-         u.debug("yt_playlistitem was:", start="EXCEPT | ")
-         u.debug(u.serialize(yt_playlistitem), start="EXCEPT > ")
-         u.debug(
-            "I am assuming that's because the video is private, so I'll set channel to 'Private'",
-            start="EXCEPT | ",
-         )
+         l.error("An exception occurred during translation from YT.PlaylistItem")
+         l.error(e)
+         l.start_group()
+         l.warn("YT.PlaylistItem was:")
+
+         l.start_group()
+         l.warn(u.serialize(yt_playlistitem))
+         l.end_group()
+
+         l.debug("Proceeding under the assumption that the video is private.")
+         l.end_group()
          self.channel_title = None
 
    def set_position(self, position: int):
