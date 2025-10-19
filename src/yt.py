@@ -146,7 +146,7 @@ class Playlist:
       page_token = None
       accumulate = []
 
-      l.info(self.title)
+      l.debug(self.title)
       l.group_start()
 
       while True:
@@ -168,7 +168,7 @@ class Playlist:
          before = len(accumulate)
          accumulate.extend(items)
          after = len(accumulate)
-         l.info(f"Playlist Item [{before:>3}, {after:>3}]")
+         l.debug(f"Playlist Item [{before:>3}, {after:>3}]")
          page_token = res.get("nextPageToken")
          if page_token is None:
             break
@@ -189,7 +189,7 @@ def my_playlists() -> list[Playlist]:
    page_token = None
    yt_playlists = []
 
-   l.info("Fetching Playlists:")
+   l.debug("Fetching Playlists:")
    l.group_start()
    while True:
       req = yt.playlists().list(
@@ -202,7 +202,7 @@ def my_playlists() -> list[Playlist]:
       before = len(yt_playlists)
       yt_playlists.extend(res["items"])
       after = len(yt_playlists)
-      l.info(f"Playlist [{before:>2}, {after:>2}]")
+      l.debug(f"Playlist [{before:>2}, {after:>2}]")
       page_token = res.get("nextPageToken")
       if page_token is None:
          break

@@ -1,4 +1,5 @@
 import sys
+import config
 import pprint
 import colorama as c
 
@@ -31,7 +32,8 @@ def group_end():
       _indent_level = 0
 
 def debug(v):
-   sys.stderr.write(_pretty_prefix(v, c.Fore.LIGHTBLACK_EX + "DBG"))
+   if config.LOG_LEVEL < 1:
+      sys.stderr.write(_pretty_prefix(v, c.Fore.LIGHTBLACK_EX + "DBG"))
 
 def info(v):
    sys.stderr.write(_pretty_prefix(v, c.Fore.BLUE + "INF"))
