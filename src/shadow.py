@@ -31,7 +31,14 @@ class PlaylistItem:
 
       if isinstance(source, str):
          # source is a single line of json
-         obj, more_line = u.deserialize_raw(source, tuple[str, str, str, str])
+         try:
+            obj, more_line = u.deserialize_raw(source, tuple[str, str, str, str])
+         except u.JSONDecodeError as e:
+            l.error("Failed to decode shadow playlist line!")
+            l.group_start()
+            l.info(source)
+            l.group_end()
+            raise e
          self.title = obj[0]
          self.channel_title = obj[1]
          self.video_id = obj[2]
