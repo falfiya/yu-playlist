@@ -38,7 +38,7 @@ def analyze(p: bridge.Playlist):
       l.warn("Local Extra (Please Remove These)")
       l.group_start()
       for extra in p.missing_from_yt:
-         l.warn(extra)
+         l.info(extra)
       l.group_end()
 
    if len(p.missing_from_shadow) > 0:
@@ -46,16 +46,19 @@ def analyze(p: bridge.Playlist):
       l.warn("Local Missing:")
       l.group_start()
       for missing in p.missing_from_shadow:
-         l.warn(missing)
+         l.info(missing)
       l.group_end()
 
-   if len(p.ooo) > 0:
-      group()
-      l.warn("Out-of-order:")
-      l.group_start()
-      for ooo in p.ooo:
-         l.warn(ooo)
-      l.group_end()
+   if p.diff_ok:
+      if len(p.ooo) > 0:
+         group()
+         l.warn("Out-of-order:")
+         l.group_start()
+         for ooo in p.ooo:
+            l.warn(ooo)
+         l.group_end()
+   else:
+      l.warn("Refusing to calculate out-of-order items.")
 
    if group_started[0]:
       l.group_end()
