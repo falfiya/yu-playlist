@@ -38,6 +38,8 @@ def deserialize_raw(s: str, _: t.Optional[t.Type[T]] = None) -> tuple[T, str]:
    val, last_idx = _default_decoder.raw_decode(s)
    return val, s[last_idx:]
 
+JSONDecodeError = json.JSONDecodeError
+
 def better_width(s: str) -> int:
    length = 0.0
    for c in s:
@@ -110,3 +112,8 @@ def longest_increasing_subsequence(unsorted: list[int]) -> list[int]:
 def shortest_out_of_order_sublist(unsorted: list[int]) -> list[int]:
    in_order = longest_increasing_subsequence(unsorted)
    return [x for x in unsorted if x not in in_order]
+
+def overwrite(f: t.Any, text: str):
+   f.seek(0)
+   f.write(text)
+   f.truncate()

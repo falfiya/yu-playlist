@@ -111,11 +111,9 @@ class Playlist:
 
    def write(self):
       full_file = u.oopen(f"{config.PLAYLISTS_PATH}/full/{self.shadow_playlist.id}.jsonl")
-      full_file.seek(0)
-      full_file.write(self.shadow_playlist.jsonl())
+      u.overwrite(full_file, self.shadow_playlist.jsonl())
       full_file.close()
-      self.friendly_file.seek(0)
-      self.friendly_file.write(self.shadow_playlist.friendly_jsonl())
+      u.overwrite(self.friendly_file, self.shadow_playlist.friendly_jsonl())
 
    def close(self):
       self.friendly_file.close()
