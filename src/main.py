@@ -14,7 +14,7 @@ def specific(fn):
    try:
       title = prompt("> ", completer=WordCompleter(filenames, ignore_case=True, match_middle=True))
    except KeyboardInterrupt:
-      print("Interrupt")
+      l.error("Interrupt")
       exit()
    filename = filenames[filenames.index(title)]
    fn(bridge.get_playlist_offline(filename))
@@ -96,7 +96,7 @@ try:
       default="specific_analysis",
    )
 except KeyboardInterrupt:
-   print("Interrupt")
+   l.error("Interrupt")
    exit()
 
 eval(what_to_do)

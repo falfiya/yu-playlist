@@ -177,7 +177,7 @@ class Playlist:
          for item in items:
             position = item["snippet"]["position"]
             accumulate[position] = item
-            print(item["snippet"]["title"])
+            l.debug(item["snippet"]["title"])
             item_playlist_id = item["snippet"]["playlistId"]
             if item_playlist_id != self.id:
                print(
