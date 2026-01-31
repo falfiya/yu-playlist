@@ -14,12 +14,19 @@ import util as u
 import log as l
 import config
 
+missing_client_secrets = """
+You are missing a client secret file.
+
+Go to https://console.cloud.google.com and then navigate:
+> [project] > Credentials > [OAuth 2.0 Client ID] > Add Secret
+"""
+
 def _secret_filename() -> str:
    for file in os.listdir("secrets"):
       if file.startswith("client_secret") and file.endswith(".json"):
          return f"secrets/{file}"
 
-   raise ValueError("Ahh, AHHHHH!")
+   raise ValueError(missing_client_secrets)
 
 def _credentials() -> Credentials:
    creds = None
@@ -55,11 +62,17 @@ def _credentials() -> Credentials:
 #
 # sybau
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-yt: YT.YouTubeResource = googleapiclient.discovery.build(
-   "youtube",
-   "v3",
-   credentials=_credentials(),
-)
+try:
+   yt: YT.YouTubeResource = googleapiclient.discovery.build(
+      "youtube",
+      "v3",
+      credentials=_credentials(),
+   )
+except Exception as e:
+   if f"{e}".find("Unauthorized"):
+      print(e)
+      print("This can happen when the Client Secret is outdated.")
+      exit(1)
 
 class Thumbnails:
    def __init__(self, yt_thumbnails: YT.ThumbnailDetails):
