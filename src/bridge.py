@@ -115,6 +115,13 @@ class Playlist:
       full_file.close()
       u.overwrite(self.friendly_file, self.shadow_playlist.friendly_jsonl())
 
+   def push(self):
+      if not self.diff_ok:
+         raise ValueError("Cannot push to YouTube when the diff is not OK!")
+
+      for ooo in self.ooo:
+         ooo.set_position(self._yt_shadow_position_forwards[ooo])
+
    def close(self):
       self.friendly_file.close()
 
@@ -211,7 +218,6 @@ class Playlist:
       )
 
       return [self.yt_shadow_position_backwards[pos] for pos in out_of_order_positions]
-
 
 def my_playlists_online() -> list[Playlist]:
    return [Playlist(yt_playlist=p) for p in yt.my_playlists()]

@@ -69,6 +69,10 @@ def ingest(p: bridge.Playlist):
    p.ingest_new_yt()
    l.group_end()
 
+def push(p: bridge.Playlist):
+   p.push()
+
+
 def reset(p: bridge.Playlist):
    l.info(f"Reset {p.shadow_playlist.title}")
    l.group_start()
@@ -85,6 +89,7 @@ try:
          ("full(analyze)"    , "Full analysis"),
          ("specific(ingest)" , "Fine-grained ingest"),
          ("full(ingest)"     , "Full ingest"),
+         ("specific(push)"   , "Fine-grained push"),
          ("specific(reset)"  , "Specific reset to match YouTube"),
          ("full(reset)"      , "Reset all to match YouTube"),
       ],

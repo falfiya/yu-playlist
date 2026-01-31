@@ -115,7 +115,7 @@ class PlaylistItem:
          body={
             "id": self.id,
             "snippet": {
-               "playlistId": self.id,
+               "playlistId": self.playlist_id,
                "position": position,
                "resourceId": {
                   "kind": "youtube#video",
@@ -147,7 +147,7 @@ class Playlist:
    @cached_property
    def items(self) -> list[PlaylistItem]:
       page_token = None
-      accumulate = []
+      accumulate = {} # stupidass API doesn't return it to us in order...
 
       l.debug(self.title)
       l.group_start()
@@ -162,6 +162,9 @@ class Playlist:
          res = req.execute()
          items = res["items"]
          for item in items:
+            position = item["snippet"]["position"]
+            accumulate[position] = item
+            print(item["snippet"]["title"])
             item_playlist_id = item["snippet"]["playlistId"]
             if item_playlist_id != self.id:
                print(
@@ -169,14 +172,13 @@ class Playlist:
                )
 
          before = len(accumulate)
-         accumulate.extend(items)
          after = len(accumulate)
          l.debug(f"Playlist Item [{before:>3}, {after:>3}]")
          page_token = res.get("nextPageToken")
          if page_token is None:
             break
 
-      output = [PlaylistItem(i) for i in accumulate]
+      output = [PlaylistItem(accumulate[i]) for i in range(0, len(accumulate))]
       l.group_end()
       return output
 
