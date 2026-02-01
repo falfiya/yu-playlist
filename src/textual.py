@@ -134,7 +134,7 @@ class PlaylistItem:
       if isinstance(source, yt.PlaylistItem):
          self.title = source.title
          self.channel_title = source.channel_title
-         self.friendly_title = u.truncate(source.title, max_len=20)
+         self.friendly_title = u.truncate(source.title, max_len=40)
 
          self.friendly_channel_title = self.channel_title
          if self.friendly_channel_title is not None:
