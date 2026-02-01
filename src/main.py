@@ -64,7 +64,7 @@ def analyze(p: bridge.Playlist):
       l.group_end()
 
 def ingest(p: bridge.Playlist):
-   l.info(f"Ingest {p.shadow_playlist.title}")
+   l.info(f"Ingest {p.shadow_file_object.title}")
    l.group_start()
    p.ingest_new_yt()
    l.group_end()
@@ -74,7 +74,7 @@ def push(p: bridge.Playlist):
 
 
 def reset(p: bridge.Playlist):
-   l.info(f"Reset {p.shadow_playlist.title}")
+   l.info(f"Reset {p.shadow_file_object.title}")
    l.group_start()
    p.reset_to_yt()
    l.group_end()
@@ -85,13 +85,13 @@ try:
    what_to_do = choice(
       message="How do you want to start?",
       options=[
-         ("specific(analyze)", "Fine-grained analysis"),
-         ("full(analyze)"    , "Full analysis"),
-         ("specific(ingest)" , "Fine-grained ingest"),
-         ("full(ingest)"     , "Full ingest"),
-         ("specific(push)"   , "Fine-grained push"),
+         ("specific(analyze)", "Specific analysis"),
+         ("full(analyze)"    , "Full     analysis"),
+         ("specific(ingest)" , "Specific ingest"),
+         ("full(ingest)"     , "Full     ingest"),
+         ("specific(push)"   , "Specific push"),
+         ("full(reset)"      , "Full     reset to match YouTube"),
          ("specific(reset)"  , "Specific reset to match YouTube"),
-         ("full(reset)"      , "Reset all to match YouTube"),
       ],
       default="specific_analysis",
    )
