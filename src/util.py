@@ -52,6 +52,9 @@ def better_width(s: str) -> int:
 
 
 def left_align(lst: list[str]):
+   if len(lst) == 0:
+      return []
+
    max_width = max(map(better_width, lst))
    for i, s in enumerate(lst):
       s_in_progress = s

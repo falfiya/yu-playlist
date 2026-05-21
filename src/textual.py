@@ -50,12 +50,18 @@ class Video:
       return u.serialize([self.id, self.title, self.channel_title])
 
 class Videos:
+   """
+   Abstract class for storing videos and their positions
+   """
    def __init__(self, source: t.Union[str, list[yt.PlaylistItem]] = []):
       """
       Either the jsonl of the .videos.jsonl, or a list of all PlaylistItems.
       """
       self._order: list[Video] = []
       self._lookup: t.Dict[str, Video] = {}
+      """
+      `VideoId -> Video`
+      """
 
       if isinstance(source, list):
          self._add(map(Video, source))
@@ -181,7 +187,7 @@ class PlaylistItem:
       self.inline_comment = prev.inline_comment
 
    def __repr__(self) -> str:
-      return f"{self.title} - {self.channel_title}"
+      return f"{self.title or self.friendly_title} - {self.channel_title or self.friendly_channel_title}"
 
 class Playlist:
    def __init__(self, source: t.Union[str, yt.Playlist]):
