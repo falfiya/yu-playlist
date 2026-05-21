@@ -11,10 +11,13 @@ import log as l
 from pathvalidate import sanitize_filename
 from functools import cached_property
 
-videos_file = u.oopen(f"{config.PLAYLISTS_PATH}/.videos.jsonl")
-videos_file_object = textual.Videos(videos_file.read())
-def write_videos():
-   videos_file.write(videos_file_object.jsonl())
+ENABLE_VIDEOS_FILE = False
+
+if ENABLE_VIDEOS_FILE:
+   videos_file = u.oopen(f"{config.PLAYLISTS_PATH}/.videos.jsonl")
+   videos_file_object = textual.Videos(videos_file.read())
+   def write_videos():
+      videos_file.write(videos_file_object.jsonl())
 
 class Playlist:
    def __init__(self, *,
@@ -64,8 +67,9 @@ class Playlist:
    def yt_playlist(self) -> yt.Playlist:
       if self._yt_playlist is None:
          self._yt_playlist = yt.get_playlist(self.shadow_file_object.id)
-      videos_file_object.add(self._yt_playlist.items)
-      write_videos()
+      if ENABLE_VIDEOS_FILE:
+         videos_file_object.add(self._yt_playlist.items)
+         write_videos()
       return self._yt_playlist
 
    def reset_to_yt(self):
