@@ -11,22 +11,40 @@ import log as l
 from pathvalidate import sanitize_filename
 from functools import cached_property
 
-ENABLE_VIDEOS_FILE = False
+# class TextPlaylistItem:
+#    @staticmethod
+#    def from_yt(source: yt.PlaylistItem):
+#       title = source.title
+#       title = u.truncate(title, max_len=40)
+#       channel_title: t.Optional[str] = source.channel_title
+#       if channel_title is not None:
+#          if channel_title.endswith(" - Topic"):
+#             channel_title = channel_title[: -len(" - Topic")]
+#          channel_title = u.truncate(channel_title, max_len=20)
 
-if ENABLE_VIDEOS_FILE:
-   videos_file = u.oopen(f"{config.PLAYLISTS_PATH}/.videos.jsonl")
-   videos_file_object = textual.Videos(videos_file.read())
-   def write_videos():
-      videos_file.write(videos_file_object.jsonl())
+#       video_id = source.video_id
+#       smol_hash = u.smol_hash(source.id)
+
+#       return TextPlaylistItem(
+#          title=title,
+#          channel_title=channel_title,
+#          video_id=video_id,
+#          smol_hash_playlist_item_id=smol_hash,
+#          above_comment=[],
+#          inline_comment=""
+#       )
+
 
 class Playlist:
-   def __init__(self, *,
-                yt_playlist: t.Optional[yt.Playlist] = None,
-                playlist_filepath: t.Optional[str] = None,
-               ):
+   def __init__(
+      self,
+      *,
+      yt_playlist: t.Optional[yt.Playlist] = None,
+      playlist_filepath: t.Optional[str] = None,
+   ):
       self.id: str
       self._yt_playlist: t.Optional[yt.Playlist] = None
-      self.shadow_file_object: textual.Playlist
+      self.shadow_file_object: textual.TextPlaylist
 
       if yt_playlist is None and playlist_filepath is None:
          raise ValueError("Must provide one of yt_playlist or playlist_filepath")
@@ -34,7 +52,9 @@ class Playlist:
       if yt_playlist is not None:
          self.id = yt_playlist.id
          if playlist_filepath is None:
-            self.shadow_file = u.oopen(f"{config.PLAYLISTS_PATH}/{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl")
+            self.shadow_file = u.oopen(
+               f"{config.PLAYLISTS_PATH}/{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl"
+            )
          self._yt_playlist = yt_playlist
 
       if playlist_filepath is not None:
@@ -42,12 +62,12 @@ class Playlist:
 
       try:
          # TODO
-         self.shadow_file_object = textual.Playlist(self.shadow_file.read())
+         self.shadow_file_object = textual.TextPlaylist(self.shadow_file.read())
       except Exception as e:
          l.warn(e)
          # Couldn't parse the shadow file. Let's write another one.
          # Of course, this means that the diff will come up empty but the code here is so fudged that I'm fine with it doing extra work.
-         self.shadow_file_object = textual.Playlist(self.yt_playlist)
+         self.shadow_file_object = textual.TextPlaylist(self.yt_playlist)
          self.write()
 
       # these type errors were put here by the MAD DEADLY WORLDWIDE COMMUNIST GANGSTER COMPUTER GOD
@@ -81,15 +101,15 @@ class Playlist:
       """
       items_to_process = self.shadow_file_object.items
       for yt_item in self.missing_from_shadow:
-         items_to_process.append(textual.PlaylistItem(yt_item))
+         items_to_process.append(textual.TextPlaylistItem(yt_item))
 
       self.shadow_file_object.items = [None] * len(self.yt_playlist.items)
 
       for item in items_to_process:
-         yt_pos = self.smol_yt_position.get(item.smol_hash) # get the youtube position
+         yt_pos = self.smol_yt_position.get(item.smol_hash)  # get the youtube position
          if yt_pos is not None:
             # This is a good item, but lets re-make it
-            item_again = textual.PlaylistItem(self.yt_lookup[item.smol_hash])
+            item_again = textual.TextPlaylistItem(self.yt_lookup[item.smol_hash])
             item_again.preserve_comments_from(item)
             self.shadow_file_object.items[yt_pos] = item_again
 
@@ -105,7 +125,7 @@ class Playlist:
          for item in missing:
             missingno = self.yt_playlist.items.index(item)
             if missingno == 0:
-               self.shadow_file_object.items.insert(0, textual.PlaylistItem(item))
+               self.shadow_file_object.items.insert(0, textual.TextPlaylistItem(item))
                l.info(f"$ <- {item}")
                break
             else:
@@ -114,12 +134,14 @@ class Playlist:
                # and match it with one in the shadow
                before_position = self.yt_shadow_position_forwards.get(before)
                if before_position is not None:
-                  self.shadow_file_object.items.insert(before_position + 1, textual.PlaylistItem(item))
+                  self.shadow_file_object.items.insert(
+                     before_position + 1, textual.TextPlaylistItem(item)
+                  )
                   l.info(f"{before} <- {item}")
                   break
          else:
             # guess not? let's just grab the first one and put it at the end
-            self.shadow_file_object.items.append(textual.PlaylistItem(missing[0]))
+            self.shadow_file_object.items.append(textual.TextPlaylistItem(missing[0]))
             l.info(f"{self.shadow_file_object.items[-1]} <- {missing[0]}")
 
          self._should_diff = True
@@ -144,7 +166,7 @@ class Playlist:
 
       self._shadow_set: t.Set[str] = set()
       self._yt_set: t.Set[str] = set()
-      self._shadow_lookup: dict[str, textual.PlaylistItem] = {}
+      self._shadow_lookup: dict[str, textual.TextPlaylistItem] = {}
       self._yt_lookup: dict[str, yt.PlaylistItem] = {}
       self._smol_yt_position: dict[str, int] = {}
       # Right now, we're trying to build a path from yt.PlaylistItem <-> indexof shadow_playlist.items
@@ -160,7 +182,6 @@ class Playlist:
          smol_to_shadow_position[item.smol_hash] = i
          self._shadow_set.add(item.smol_hash)
          self._shadow_lookup[item.smol_hash] = item
-
 
       for i, item in enumerate(self.yt_playlist.items):
          smol = u.smol_hash(item.id)
@@ -185,7 +206,7 @@ class Playlist:
       return self._yt_set
 
    @property
-   def shadow_lookup(self) -> dict[str, textual.PlaylistItem]:
+   def shadow_lookup(self) -> dict[str, textual.TextPlaylistItem]:
       self._init_diff()
       return self._shadow_lookup
 
@@ -210,7 +231,7 @@ class Playlist:
       return self._yt_shadow_position_backwards
 
    @property
-   def missing_from_yt(self) -> list[textual.PlaylistItem]:
+   def missing_from_yt(self) -> list[textual.TextPlaylistItem]:
       return [self.shadow_lookup[smol] for smol in self.shadow_set - self.yt_set]
 
    @property
@@ -232,14 +253,22 @@ class Playlist:
 
       return [self.yt_shadow_position_backwards[pos] for pos in out_of_order_positions]
 
+
 def my_playlists_online() -> list[Playlist]:
    return [Playlist(yt_playlist=p) for p in yt.my_playlists()]
 
+
 def my_playlist_files() -> list[str]:
-   return [filename[:-6] for filename in os.listdir(config.PLAYLISTS_PATH) if filename.endswith(".jsonl")]
+   return [
+      filename[:-6]
+      for filename in os.listdir(config.PLAYLISTS_PATH)
+      if filename.endswith(".jsonl")
+   ]
+
 
 def get_playlist_offline(filename: str) -> Playlist:
    return Playlist(playlist_filepath=f"{config.PLAYLISTS_PATH}/{filename}.jsonl")
+
 
 def my_playlists_offline() -> list[Playlist]:
    return [

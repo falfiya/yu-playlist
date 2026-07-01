@@ -4,193 +4,68 @@
 from __future__ import annotations
 import util as u
 import typing as t
-import yt
 import log as l
 
 from time import time
 
-class Video:
-   def __init__(self, source: t.Union[str, yt.PlaylistItem]):
-      self.id: str
-      self.title: str
-      self.channel_title: t.Optional[str]
 
-      if isinstance(source, yt.PlaylistItem):
-         self.id = source.video_id
-         self.title = source.title
-         self.channel_title = source.channel_title
-         return
+class TextPlaylistItem:
+   @staticmethod
+   def from_line(line: str):
+      # source is a single line of json
+      try:
+         obj, more_line = u.deserialize_raw(line, tuple[str, t.Optional[str], str, str])
+      except u.JSONDecodeError as e:
+         l.error("Failed to decode shadow playlist line!")
+         l.group_start()
+         l.info(line)
+         l.group_end()
+         raise e
+      [title, channel_title, video_id, smol_hash] = obj
 
-      if isinstance(source, str):
-         try:
-            obj, more_line = u.deserialize_raw(source, tuple[str, str, str, str])
-         except u.JSONDecodeError as e:
-            l.error("Failed to decode video jsonl!")
-            l.group_start()
-            l.info(source)
-            l.group_end()
-            raise e
+      more_line2 = more_line.strip()
+      if len(more_line2) == 0:
+         # it was all whitespace
+         inline_comment = ""
+      elif more_line2.startswith("//"):
+         inline_comment = more_line
+      else:
+         raise ValueError(f"Unexpected text {u.serialize(more_line2)} after {title}!")
 
-         self.id = obj[0]
-         self.title = obj[1]
-         self.channel_title = obj[2]
+      return TextPlaylistItem(
+         title=title,
+         channel_title=channel_title,
+         video_id=video_id,
+         smol_hash_playlist_item_id=smol_hash,
+         above_comment=[],
+         inline_comment=inline_comment,
+      )
 
-         if more_line != "":
-            raise ValueError(f"Uninterpreted text near {u.serialize(source)}!")
-
-         return
-
-      raise TypeError(f"SANITY: Unexpected {type(source)}")
-
-   def update(self, new: Video):
-      self.title = new.title
-      self.channel_title = new.channel_title
-
-   def jsonl(self) -> str:
-      return u.serialize([self.id, self.title, self.channel_title])
-
-class Videos:
-   """
-   Abstract class for storing videos and their positions
-   """
-   def __init__(self, source: t.Union[str, list[yt.PlaylistItem]] = []):
-      """
-      Either the jsonl of the .videos.jsonl, or a list of all PlaylistItems.
-      """
-      self._order: list[Video] = []
-      self._lookup: t.Dict[str, Video] = {}
-      """
-      `VideoId -> Video`
-      """
-
-      if isinstance(source, list):
-         self._add(map(Video, source))
-         return
-
-      if isinstance(source, str):
-         self._add(map(Video, source.splitlines()))
-         return
-
-      raise TypeError(f"SANITY: Unexpected {type(source)}")
-
-   def _add(self, videos: t.Iterator[Video]):
-      for video in videos:
-         if video.id in self._lookup:
-            self._lookup[video.id].update(video)
-         self._lookup[video.id] = video
-         self._order.append(video)
-
-   def add(self, source: list[yt.PlaylistItem]):
-      self._add(map(Video, source))
-
-   def __getitem__(self, key: int | str):
-      if isinstance(key, int):
-         return self._order[key]
-
-      if isinstance(key, str):
-         return self._lookup[key]
-
-      raise TypeError(f"SANITY: Unexpected {type(key)}")
-
-   def __delitem__(self, key: int | str) -> None:
-      if isinstance(key, int):
-         del self._lookup[self._order[key].id]
-         del self._order[key]
-         return
-
-      if isinstance(key, str):
-         self._order.remove(self._lookup[key])
-         del self._lookup[key]
-         return
-
-      raise TypeError(f"SANITY: Unexpected {type(key)}")
-
-   def jsonl(self) -> str:
-      return "\n".join(v.jsonl() for v in self._order) + "\n"
-
-class PlaylistItem:
-   """
-   Incomplete PlaylistItem which contains only as much information as is in the
-   friendly jsonl file.
-   """
-
-   def __init__(self, source: t.Union[str, yt.PlaylistItem], above_comment: list[str] = []):
-      # Depending on how the object is made, these strings may not be known.
-      # Instead, a friendly title and friendly channel_title will be known, and do not require truncation.
-      self.title: t.Optional[str] = None
-      self.channel_title: t.Optional[str] = None
-
-      # The friendly strings can be created from the normal strings, but not the other way around.
-      self.friendly_title: str
-      self.friendly_channel_title: t.Optional[str] = None
-      """
-      Annoyingly, sometimes the channel_title proper is None, so it poisons the friendly_channel_title.
-      """
-
-      self.video_id: str
-      self.smol_hash: str
+   def __init__(
+      self,
+      *,
+      title: str,
+      channel_title: t.Optional[str],
+      video_id: str,
+      smol_hash_playlist_item_id: str,
+      above_comment: list[str],
+      inline_comment: str,
+   ):
+      self.title = title
+      self.channel_title = channel_title
+      self.video_id = video_id
+      self.smol_hash = smol_hash_playlist_item_id
       self.above_comment = above_comment
-
-      self.inline_comment: t.Optional[str] = None
-      """
-      If a friendly playlist source file was passed in, then there was a potential comment here, in which case the comment will be "".
-      Otherwise, it will be left as None, signifying that it's unknown if there was a comment.
-      """
-
-      if isinstance(source, yt.PlaylistItem):
-         self.title = source.title
-         self.channel_title = source.channel_title
-         self.friendly_title = u.truncate(source.title, max_len=40)
-
-         self.friendly_channel_title = self.channel_title
-         if self.friendly_channel_title is not None:
-            if self.friendly_channel_title.endswith(" - Topic"):
-               self.friendly_channel_title = self.friendly_channel_title[: -len(" - Topic")]
-            self.friendly_channel_title = u.truncate(self.friendly_channel_title, max_len=20)
-
-         self.video_id = source.video_id
-         self.smol_hash = u.smol_hash(source.id)
-
-         return
-
-      if isinstance(source, str):
-         # source is a single line of json
-         try:
-            obj, more_line = u.deserialize_raw(source, tuple[str, str, str, str])
-         except u.JSONDecodeError as e:
-            l.error("Failed to decode shadow playlist line!")
-            l.group_start()
-            l.info(source)
-            l.group_end()
-            raise e
-         self.friendly_title = obj[0]
-         self.friendly_channel_title = obj[1]
-         self.video_id = obj[2]
-         self.smol_hash = obj[3]
-
-         more_line2 = more_line.strip()
-         if len(more_line2) == 0:
-            # it was all whitespace
-            self.inline_comment = ""
-         elif more_line2.startswith("//"):
-            self.inline_comment = more_line
-         else:
-            raise ValueError(f"Unexpected text {u.serialize(more_line2)} after {self.title}!")
-
-         return
-
-      raise TypeError(f"SANITY: Unexpected {type(source)}")
-
-
-   def preserve_comments_from(self, prev: PlaylistItem):
-      self.above_comment = prev.above_comment
-      self.inline_comment = prev.inline_comment
+      self.inline_comment = inline_comment
 
    def __repr__(self) -> str:
-      return f"{self.title or self.friendly_title} - {self.channel_title or self.friendly_channel_title}"
+      return f"{self.title} - {self.channel_title}"
 
-class Playlist:
-   def __init__(self, source: t.Union[str, yt.Playlist]):
+
+class TextPlaylist:
+   def __init__(self, *,
+                title: str,
+                source: t.Union[str, yt.Playlist]):
       """
       If you're initializing this with a yt.Playlist, you're probably only looking for the .jsonl
       functionality so that you can immediately write out to disk.
@@ -200,12 +75,12 @@ class Playlist:
       self.id: str
       self.time: float
 
-      self.items: list[PlaylistItem] = []
+      self.items: list[TextPlaylistItem] = []
       if isinstance(source, yt.Playlist):
          self.time = time()
          self.title = source.title
          self.id = source.id
-         self.items = [PlaylistItem(item) for item in source.items]
+         self.items = [TextPlaylistItem(item) for item in source.items]
          return
 
       if isinstance(source, str):
@@ -245,7 +120,10 @@ class Playlist:
             lines_and_comments.append((line, comment_above))
             comment_above = []
 
-         self.items = [PlaylistItem(line, comment_above) for line, comment_above in lines_and_comments]
+         self.items = [
+            TextPlaylistItem(line, comment_above)
+            for line, comment_above in lines_and_comments
+         ]
          return
 
       raise TypeError(f"SANITY: Unexpected type {type(source)}")
