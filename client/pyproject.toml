@@ -1,10 +1,9 @@
 [project]
-name = "yu-playlist"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.13"
+name = "yu-playlist-client"
+version = "0.2.0"
+requires-python = ">=3.14"
 dependencies = [
+   "colorama>=0.4.6",
    "google-api-python-client>=2.177.0",
    "google-api-python-client-stubs>=1.30.0",
    "google-auth-httplib2>=0.2.0",
@@ -13,11 +12,6 @@ dependencies = [
    "prompt-toolkit>=3.0.52",
    "wcwidth>=0.2.13",
 ]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true
 
 [tool.pytest.ini_options]
 pythonpath = [
