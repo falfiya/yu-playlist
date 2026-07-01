@@ -1,0 +1,7 @@
+LOG_LEVEL = 1
+OAUTH2_CALLBACK_PORT = 0
+YT_SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+# Things found in the secrets directory:
+# - client_secret_xxxxxxx.json
+# - token.json
+SECRETS_PATH = "secrets/token.json"
