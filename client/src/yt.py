@@ -21,6 +21,8 @@ Go to https://console.cloud.google.com and then navigate:
 > [project] > Credentials > [OAuth 2.0 Client ID] > Add Secret
 """
 
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+
 def _secret_filename() -> str:
    for file in os.listdir("secrets"):
       if file.startswith("client_secret") and file.endswith(".json"):
@@ -96,8 +98,6 @@ class Thumbnails:
 
 class PlaylistItem:
    def __init__(self, yt_playlistitem: YT.PlaylistItem):
-      self.is_private = False
-
       self.id: str = yt_playlistitem["id"]
       snippet = yt_playlistitem["snippet"]
 

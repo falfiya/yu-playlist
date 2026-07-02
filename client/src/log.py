@@ -1,7 +1,9 @@
-import sys
-import config
 import pprint
+import sys
+
 import colorama as c
+
+import config
 
 _indent_level: int = 0
 

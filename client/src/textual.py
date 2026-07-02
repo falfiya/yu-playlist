@@ -2,13 +2,15 @@
 # Unfortunately it also knows the internal structure of yt, but it at least does
 # not know about the filesystem.
 from __future__ import annotations
-import util as u
+
+import datetime
 import typing as t
-import log as l
 
 import pydantic as p
 
-import datetime
+import log as l
+import util as u
+
 
 class TextPlaylistItem(p.BaseModel):
    title: str

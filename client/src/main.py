@@ -1,10 +1,11 @@
 import colorama as c
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.shortcuts import choice
+
 import bridge
 import log as l
 
-from prompt_toolkit import prompt
-from prompt_toolkit.shortcuts import choice
-from prompt_toolkit.completion import WordCompleter
 
 def specific(fn):
    filenames = bridge.my_playlist_files()
@@ -79,7 +80,9 @@ def reset(p: bridge.Playlist):
    p.reset_to_yt()
    l.group_end()
 
-print(f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the command-line interface for yu-playlist!")
+print(
+   f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the command-line interface for yu-playlist!"
+)
 
 try:
    what_to_do = choice(
