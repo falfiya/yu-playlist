@@ -1,7 +1,8 @@
-import os
 import base64
+import re
 import hashlib
 import json
+import os
 import typing as t
 from bisect import bisect_left
 
@@ -27,18 +28,26 @@ def oopen(path: str):
 
    return open(path, "r+", encoding="utf-8")
 
+
 def deserialize(s: str):
    return json.loads(s)
+
 
 def serialize(x):
    return json.dumps(x, ensure_ascii=False)
 
+
 _default_decoder = json.JSONDecoder()
+
+
 def deserialize_raw(s: str, _: t.Optional[t.Type[T]] = None) -> tuple[T, str]:
+   s = s.strip()
    val, last_idx = _default_decoder.raw_decode(s)
    return val, s[last_idx:]
 
+
 JSONDecodeError = json.JSONDecodeError
+
 
 def better_width(s: str) -> int:
    length = 0.0
@@ -76,6 +85,7 @@ def truncate(s: str, max_len: int) -> str:
 
 def smol_hash(s: str) -> str:
    return base64.b32encode(hashlib.sha256(s.encode()).digest()).decode()[:10]
+
 
 def longest_increasing_subsequence(unsorted: list[int]) -> list[int]:
    if len(unsorted) < 2:
@@ -116,7 +126,26 @@ def shortest_out_of_order_sublist(unsorted: list[int]) -> list[int]:
    in_order = longest_increasing_subsequence(unsorted)
    return [x for x in unsorted if x not in in_order]
 
+
 def overwrite(f: t.Any, text: str):
    f.seek(0)
    f.write(text)
    f.truncate()
+
+
+re_comment = re.compile(r"\s*(?://.*)?")
+
+
+def is_comment(line: str):
+   return re_comment.fullmatch(line) is not None
+
+
+def head_comments(lines: list[str]) -> tuple[list[str], list[str]]:
+   head = []
+   while len(lines) > 0:
+      line = lines[0]
+      if not is_comment(line):
+         break
+      head.append(line)
+      lines = lines[1:]
+   return head, lines

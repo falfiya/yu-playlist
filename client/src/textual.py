@@ -6,12 +6,20 @@ import util as u
 import typing as t
 import log as l
 
-from time import time
+import pydantic as p
 
+import datetime
 
-class TextPlaylistItem:
+class TextPlaylistItem(p.BaseModel):
+   title: str
+   channel_title: t.Optional[str]
+   video_id: str
+   smol_hash_playlist_item_id: str
+   above_comment: list[str]
+   inline_comment: str
+
    @staticmethod
-   def from_line(line: str):
+   def from_line(line: str) -> TextPlaylistItem:
       # source is a single line of json
       try:
          obj, more_line = u.deserialize_raw(line, tuple[str, t.Optional[str], str, str])
@@ -41,106 +49,82 @@ class TextPlaylistItem:
          inline_comment=inline_comment,
       )
 
-   def __init__(
-      self,
-      *,
-      title: str,
-      channel_title: t.Optional[str],
-      video_id: str,
-      smol_hash_playlist_item_id: str,
-      above_comment: list[str],
-      inline_comment: str,
-   ):
-      self.title = title
-      self.channel_title = channel_title
-      self.video_id = video_id
-      self.smol_hash = smol_hash_playlist_item_id
-      self.above_comment = above_comment
-      self.inline_comment = inline_comment
-
    def __repr__(self) -> str:
       return f"{self.title} - {self.channel_title}"
 
 
-class TextPlaylist:
-   def __init__(self, *,
-                title: str,
-                source: t.Union[str, yt.Playlist]):
-      """
-      If you're initializing this with a yt.Playlist, you're probably only looking for the .jsonl
-      functionality so that you can immediately write out to disk.
-      """
-      self.title: str
-      self.playlist_comment: list[str] = []
-      self.id: str
-      self.time: float
+class TextPlaylist(p.BaseModel):
+   """
+   <pre>
+                                                         // overline_comments[0]
+   "Playlist Title"                                      // inline_comments[0]
+                                                         // overline_comments[1]
+   "playlist.id"                                         // inline_comments[1]
+                                                         // overline_comments[2]
+   00000.0000                                            // inline_comments[2]
+   ["Rich Man"  , "aespa"       , "WAQ5_7YFAVo", "73PNDXNHGL"]
+   ["Aris Rage" , "BasedMonster", "zbsbcKfqtSQ", "PTZI4WR47P"]
+   </pre>
+   """
 
-      self.items: list[TextPlaylistItem] = []
-      if isinstance(source, yt.Playlist):
-         self.time = time()
-         self.title = source.title
-         self.id = source.id
-         self.items = [TextPlaylistItem(item) for item in source.items]
-         return
+   id: str
+   title: str
+   last_jsonl_time: t.Any
+   overline_comments: tuple[list[str], list[str], list[str]]
+   inline_comments: tuple[str, str, str]
+   items: list[TextPlaylistItem]
+   trailing_comments: list[str]
 
-      if isinstance(source, str):
-         jsonl = [line.strip() for line in source.splitlines()]
+   @staticmethod
+   def from_str(lines: list[str]) -> TextPlaylist:
+      overline_comments: list[list[str]] = [[]] * 3
+      inline_comments: list[str] = [""] * 3
 
-         title = u.deserialize(jsonl.pop(0))
-         if not isinstance(title, str):
-            raise ValueError("Title must be a string!")
-         self.title: str = title
+      overline_comments[0], lines = u.head_comments(lines)
+      title, inline_comments[0] = u.deserialize_raw(lines.pop(0))
 
-         # I will allow a playlist comment on the second line.
-         while jsonl[0].startswith("//"):
-            self.playlist_comment.append(jsonl.pop(0))
+      overline_comments[1], lines = u.head_comments(lines)
+      id, inline_comments[1] = u.deserialize_raw(lines.pop(0))
 
-         id_ = u.deserialize(jsonl.pop(0))
-         if not isinstance(id_, str):
-            raise ValueError("id must be a string!")
-         self.id: str = id_
+      overline_comments[2], lines = u.head_comments(lines)
+      last_jsonl_time, inline_comments[2] = u.deserialize_raw(lines.pop(0))
 
-         time_ = u.deserialize(jsonl.pop(0))
-         if not isinstance(time_, float):
-            raise ValueError("time must be a float!")
-         self.time: float = time_
+      items: list[TextPlaylistItem] = []
+      trailing_comments = []
+      while len(lines) > 0:
+         comment_above, lines = u.head_comments(lines)
+         if len(lines) == 0:
+            trailing_comments = comment_above
+            break
+         else:
+            items.append(TextPlaylistItem.from_line(lines.pop(0)))
 
-         lines_and_comments: list[tuple[str, list[str]]] = []
-         comment_above = []
-         for line in jsonl:
-            line = line.strip()
-
-            if line == "":
-               continue
-
-            if line.startswith("//"):
-               comment_above.append(line)
-               continue
-
-            lines_and_comments.append((line, comment_above))
-            comment_above = []
-
-         self.items = [
-            TextPlaylistItem(line, comment_above)
-            for line, comment_above in lines_and_comments
-         ]
-         return
-
-      raise TypeError(f"SANITY: Unexpected type {type(source)}")
+      return TextPlaylist(
+         id=id,
+         title=title,
+         last_jsonl_time=last_jsonl_time,
+         overline_comments=overline_comments, # type: ignore coerce
+         inline_comments=inline_comments, # type: ignore coerce
+         items=items,
+         trailing_comments=trailing_comments,
+      )
 
    def jsonl(self) -> str:
+      this_jsonl_time = datetime.datetime.now().isoformat()
       jsonl_out = ""
-      jsonl_out += u.serialize(self.title) + "\n"
-      jsonl_out += "".join(line + "\n" for line in self.playlist_comment)
-      jsonl_out += u.serialize(self.id) + "\n"
-      jsonl_out += u.serialize(self.time) + "\n"
+      jsonl_out += "\n".join(self.overline_comments[0]) + "\n"
+      jsonl_out += u.serialize(self.title) + self.inline_comments[0] + "\n"
+      jsonl_out += "\n".join(self.overline_comments[1]) + "\n"
+      jsonl_out += u.serialize(self.id) + self.inline_comments[1] + "\n"
+      jsonl_out += "\n".join(self.overline_comments[2])
+      jsonl_out += u.serialize(this_jsonl_time) + self.inline_comments[2] + "\n"
 
       cols: tuple[list[str], list[str], list[str], list[str]] = ([], [], [], [])
       for i in self.items:
-         cols[0].append(u.serialize(i.friendly_title))
-         cols[1].append(u.serialize(i.friendly_channel_title))
+         cols[0].append(u.serialize(i.title))
+         cols[1].append(u.serialize(i.channel_title))
          cols[2].append(u.serialize(i.video_id))
-         cols[3].append(u.serialize(i.smol_hash))
+         cols[3].append(u.serialize(i.smol_hash_playlist_item_id))
 
       for col in cols:
          u.left_align(col)
@@ -152,4 +136,5 @@ class TextPlaylist:
             jsonl_out += item.inline_comment
          jsonl_out += "\n"
 
+      jsonl_out += "\n".join(self.trailing_comments) + "\n"
       return jsonl_out
