@@ -21,13 +21,15 @@ pragma analysis_limit=400;
 pragma optimize;
 """
 
+
 class Migration(t.NamedTuple):
    @staticmethod
    def all() -> list[Migration]:
       re_migration_format = re.compile(r"(\d+)_(\w+)\.sql")
       migration_dir = Path(__file__).parent / "migrations"
       stuff_in_migration_dir = [
-         (m, re_migration_format.fullmatch(m)) for m in os.listdir(migration_dir)]
+         (m, re_migration_format.fullmatch(m)) for m in os.listdir(migration_dir)
+      ]
 
       out_objs = []
       for path, match in stuff_in_migration_dir:
@@ -40,8 +42,9 @@ class Migration(t.NamedTuple):
                id=int(match.group(1)),
                name=match.group(2),
                md5hash=hashlib.md5(buf).hexdigest(),
-               content=str(buf)
-            ))
+               content=str(buf),
+            )
+         )
       return out_objs
 
    id: int
@@ -49,10 +52,12 @@ class Migration(t.NamedTuple):
    md5hash: str
    content: str
 
+
 class ClientDatabase:
    """
    Opens the database, runs migration, and hooks up Python bindings
    """
+
    def __init__(self, path: str):
       self.f = open(path, "r+b")
       raw = self.f.read()
@@ -64,5 +69,9 @@ class ClientDatabase:
       self.__run_migrations()
 
    def __run_migrations(self):
-      for migration in Migration.all():
-         self.conn.execute("select * from __migrations;").fetchall()
+      self.conn.execute("select * from __migrations;").fetchall()
+      # TODO: put both of these into lists.
+      # Check that if a migration has been run, the hash is the same.
+      # Given ord m < m' < m''
+      # If a migration m has been run, and a migration m'' has been run,
+      # then m' must be run. Error if this is not the case!

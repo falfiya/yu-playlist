@@ -1,3 +1,6 @@
+# This file is hereby condemned
+# Move all functionality into main.py
+
 # Bridge between filesystem, textual, and YouTube
 # Diffing etc.
 import typing as t
@@ -53,7 +56,7 @@ class Playlist:
          self.id = yt_playlist.id
          if playlist_filepath is None:
             self.shadow_file = u.oopen(
-               f"{config.PLAYLISTS_PATH}/{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl"
+               f"{sanitize_filename(yt_playlist.title)} - {u.smol_hash(self.id)}.jsonl"
             )
          self._yt_playlist = yt_playlist
 
@@ -64,7 +67,7 @@ class Playlist:
          # TODO
          self.shadow_file_object = textual.TextPlaylist(self.shadow_file.read())
       except Exception as e:
-         l.warn(e)
+         self.l.warn(e)
          # Couldn't parse the shadow file. Let's write another one.
          # Of course, this means that the diff will come up empty but the code here is so fudged that I'm fine with it doing extra work.
          self.shadow_file_object = textual.TextPlaylist(self.yt_playlist)

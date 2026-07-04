@@ -3,4 +3,4 @@ oauth2_callback_port = 0
 # Things found in the secrets directory:
 # - client_secret_xxxxxxx.json
 # - token.json
-secrets_path = "secrets/token.json"
+secrets_path = "secrets"

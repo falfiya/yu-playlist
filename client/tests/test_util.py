@@ -17,15 +17,15 @@ def test_longest_increasing_sublist():
 
 
 def test_head_comments():
-   src=       [
-         "",
-         "// foo",
-         "   // foo",
-         "",
-         "there's something here",
-         "",
-         "// and here",
-         "this is last",
+   src = [
+      "",
+      "// foo",
+      "   // foo",
+      "",
+      "there's something here",
+      "",
+      "// and here",
+      "this is last",
    ]
    head, src = u.head_comments(src)
    print(head, src)
