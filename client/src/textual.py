@@ -8,9 +8,8 @@ import typing as t
 
 import pydantic as p
 
-import log as l
 import util as u
-
+from log import Logging
 
 class TextPlaylistItem(p.BaseModel):
    title: str
@@ -21,7 +20,7 @@ class TextPlaylistItem(p.BaseModel):
    inline_comment: str
 
    @staticmethod
-   def from_line(line: str) -> TextPlaylistItem:
+   def from_line(line: str, l: Logging) -> TextPlaylistItem:
       # source is a single line of json
       try:
          obj, more_line = u.deserialize_raw(line, tuple[str, t.Optional[str], str, str])
@@ -78,7 +77,7 @@ class TextPlaylist(p.BaseModel):
    trailing_comments: list[str]
 
    @staticmethod
-   def from_str(lines: list[str]) -> TextPlaylist:
+   def from_str(lines: list[str], l: Logging) -> TextPlaylist:
       overline_comments: list[list[str]] = [[]] * 3
       inline_comments: list[str] = [""] * 3
 
@@ -99,7 +98,7 @@ class TextPlaylist(p.BaseModel):
             trailing_comments = comment_above
             break
          else:
-            items.append(TextPlaylistItem.from_line(lines.pop(0)))
+            items.append(TextPlaylistItem.from_line(lines.pop(0), l))
 
       return TextPlaylist(
          id=id,
@@ -118,7 +117,7 @@ class TextPlaylist(p.BaseModel):
       jsonl_out += u.serialize(self.title) + self.inline_comments[0] + "\n"
       jsonl_out += "\n".join(self.overline_comments[1]) + "\n"
       jsonl_out += u.serialize(self.id) + self.inline_comments[1] + "\n"
-      jsonl_out += "\n".join(self.overline_comments[2])
+      jsonl_out += "\n".join(self.overline_comments[2]) + "\n"
       jsonl_out += u.serialize(this_jsonl_time) + self.inline_comments[2] + "\n"
 
       cols: tuple[list[str], list[str], list[str], list[str]] = ([], [], [], [])
