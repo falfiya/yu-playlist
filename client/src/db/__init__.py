@@ -108,7 +108,7 @@ class ClientDatabase:
          migrations_on_disk[m.id] = m
 
       prevent_already_applied_migrations = False
-      for id in range(1, len(migrations_on_disk) + 1):
+      for id in range(0, len(migrations_on_disk)):
          if id in applied_migrations:
             assert not prevent_already_applied_migrations, (
                f"SANITY: The previous migration {id - 1} was not applied, yet somehow {id} was!"
