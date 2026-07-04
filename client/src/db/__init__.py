@@ -79,6 +79,9 @@ class ClientDatabase:
       self.conn.execute(CLOSE)
       self.conn.close()
 
+   def add_playlist_item(self):
+      ...
+
    def __run_migrations(self):
       """
       Migrations are written as migrations/00_name.sql and must increase
