@@ -15,3 +15,4 @@ class ClientConfig(p.BaseModel):
    log_level: int
    oauth2_callback_port: int
    secrets_path: str
+   device_name: str

@@ -1,81 +1,85 @@
--- Video data is fetched using the .snippet field of PlaylistItem.
--- We keep track of very basic information.
-create table _strings(
-   id integer primary key,
+-- 1. Intern the strings
+create table string(
+   S integer primary key,
    value text unique
 ) strict;
-insert into _strings(id, value) values (0, null);
-insert into _strings(id, value) values (1, '');
+insert into string(id, value) values (0, null);
+insert into string(id, value) values (1, '');
 
---------------------------------------------------------------------------------
--- Basic Entity Ids
-create table _channels(
-   id integer references _strings(id) primary key
-) strict;
-
-create table _videos(
-   id integer references _strings(id) primary key
-) strict;
-
-create table _playlists(
-   id integer references _strings(id) primary key
-) strict;
-
-create table _playlist_items(
+-- 2. Ensure the playlist item exists
+create table playlist_item(
    -- PlaylistItem ids are globally unique and durable
-   id integer references _strings(id) primary key,
+   id integer references string(S) primary key,
    -- and the video never changes for that item.
-   vid integer references _videos(id),
+   video_id integer references string(S),
    -- Nor does the playlist it belongs to
-   pid integer references _playlists(id)
+   playlist_id integer references string(S)
 ) strict;
 
+-- 3. Take a Snapshot
 --------------------------------------------------------------------------------
+-- Playlist Snapshot Structure:
+-- Snapshots are inserted into the database using a transaction.
+-- If an ⟨epoch, playlist_id⟩ row is present in this table,
+-- playlist_item is a complete list of all playlist items.
+-- If an item is not present for that epoch, it was removed.
+create table playlist_at(
+   epoch integer not null,
+   playlist_id integer references string(S),
+   device integer references string(S), -- useful for figuring out which computer it came from
+   ex integer references playlist_ex(ex_id),
+   primary key (epoch, playlist_id)
+) strict;
+
+create table playlist_item_at(
+   epoch integer not null,
+   playlist_item_id integer references playlist_item(id),
+   position integer not null,
+   primary key (epoch, playlist_item_id),
+   -- foreign key (epoch,
+   --    (select playlist_id from playlist_item where id = playlist_item_id))
+   -- references playlist_item(epoch, playlist_id)
+) strict;
+
+-- 4. Collect Other Pieces of Data
+--------------------------------------------------------------------------------
+-- Other Pieces of Data:
 -- The actual data of most objects doesn't change much over time and is
 -- deduplicated into these tables and addressed using a single integer.
-create table _channel_data(
-   id integer primary key,
-   title integer references _strings(id) unique
+create table channel_ex(
+   ex_id integer primary key,
+   title integer references string(S) unique
 ) strict;
 
-create table _video_data(
-   id integer primary key,
-   owner integer references _channels(id),
-   title integer references _strings(id),
+create table video_ex(
+   ex_id integer primary key,
+   owner integer references string(S),
+   title integer references string(S),
    unique(owner, title)
 ) strict;
 
-create table _playlist_data(
-   id integer primary key,
-   title integer references _strings(id),
-   desc integer references _strings(id),
+create table playlist_ex(
+   ex_id integer primary key,
+   title integer references string(S),
+   desc integer references string(S),
    unique(title, desc)
 ) strict;
+
 --------------------------------------------------------------------------------
 -- xxx_at tables track the change of data over time.
 -- It is expected that each snapshot, many rows are created in each of these.
 -- Since most data will be the same, a single integer is a lot cheaper than
 -- storing a bunch of integers.
-create table _channel_at(
+create table channel_at(
    epoch integer not null,
-   cid integer references _channels(id),
-   data integer references _channel_data(id)
+   id integer references string(S),
+   ex integer references channel_ex(ex_id),
+   primary key (epoch, id)
 ) strict;
 
-create table _video_at(
+create table video_at(
    epoch integer not null,
-   vid integer references _videos(id),
-   data integer references _video_data(id)
-) strict;
-
-create table _playlist_at(
-   epoch integer not null,
-   pid integer references _playlists(id),
-   data integer references _playlist_data(id)
-) strict;
-
-create table _playlist_item_at(
-   epoch integer not null,
-   pid integer references _playlist_items(id),
-   position integer not null
+   id integer references string(S),
+   ex integer references video_ex(ex_id),
+   primary key (epoch, id)
 ) strict;
