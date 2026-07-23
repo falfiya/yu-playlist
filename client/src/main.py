@@ -1,3 +1,5 @@
+import argparse
+
 import colorama as c
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
@@ -6,6 +8,20 @@ from prompt_toolkit.shortcuts import choice
 import bridge
 import log as l
 
+assert __name__ == "__main__", "You must invoke this as a script"
+
+parser = argparse.ArgumentParser(
+   prog="yu-playlist",
+   description="TUI for managing YouTube Playlists",
+   epilog="and thats how you use the program. thank you for coming to my ted talk",
+)
+parser.add_argument("directory", required=True, help="The directory where playlists are stored")
+class ClientArguments:
+   directory: str
+
+args = ClientArguments()
+parser.parse_args(namespace=args)
+
 
 def specific(fn):
    filenames = bridge.my_playlist_files()
@@ -13,12 +29,15 @@ def specific(fn):
       print(f" - {t}")
 
    try:
-      title = prompt("> ", completer=WordCompleter(filenames, ignore_case=True, match_middle=True))
+      title = prompt(
+         "> ", completer=WordCompleter(filenames, ignore_case=True, match_middle=True)
+      )
    except KeyboardInterrupt:
       l.error("Interrupt")
       exit()
    filename = filenames[filenames.index(title)]
    fn(bridge.get_playlist_offline(filename))
+
 
 def full(fn):
    filenames = bridge.my_playlists_online()
@@ -26,8 +45,10 @@ def full(fn):
       fn(p)
    l.info(f"Processed {len(filenames)} playlists!")
 
+
 def analyze(p: bridge.Playlist):
    group_started = [False]
+
    def group():
       if not group_started[0]:
          l.info(p.yt_playlist.title)
@@ -64,11 +85,13 @@ def analyze(p: bridge.Playlist):
    if group_started[0]:
       l.group_end()
 
+
 def ingest(p: bridge.Playlist):
    l.info(f"Ingest {p.shadow_file_object.title}")
    l.group_start()
    p.ingest_new_yt()
    l.group_end()
+
 
 def push(p: bridge.Playlist):
    p.push()
@@ -80,6 +103,7 @@ def reset(p: bridge.Playlist):
    p.reset_to_yt()
    l.group_end()
 
+
 print(
    f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the command-line interface for yu-playlist!"
 )
@@ -89,12 +113,12 @@ try:
       message="How do you want to start?",
       options=[
          ("specific(analyze)", "Specific analysis"),
-         ("full(analyze)"    , "Full     analysis"),
-         ("specific(ingest)" , "Specific ingest"),
-         ("full(ingest)"     , "Full     ingest"),
-         ("specific(push)"   , "Specific push"),
-         ("full(reset)"      , "Full     reset to match YouTube"),
-         ("specific(reset)"  , "Specific reset to match YouTube"),
+         ("full(analyze)", "Full     analysis"),
+         ("specific(ingest)", "Specific ingest"),
+         ("full(ingest)", "Full     ingest"),
+         ("specific(push)", "Specific push"),
+         ("full(reset)", "Full     reset to match YouTube"),
+         ("specific(reset)", "Specific reset to match YouTube"),
       ],
       default="specific_analysis",
    )

@@ -1,14 +1,15 @@
+import compression.zstd as zstd
 import hashlib
 import os
 import re
+import time
 import typing as t
 from pathlib import Path
 
 import apsw
 import apsw.bestpractice
 import pydantic as p
-import compression.zstd as zstd
-import time
+
 import config
 
 apsw.bestpractice.apply(apsw.bestpractice.recommended)
@@ -62,6 +63,7 @@ class MigrationOnDisk(t.NamedTuple):
    md5hash: str
    content: str
 
+
 ################################################################################
 ## Database API
 class ClientDatabase:
@@ -84,7 +86,9 @@ class ClientDatabase:
       epoch = int(time.time())
       self.conn.execute("begin immediate transaction")
       intern_map = self._add_strings(s.strings() + [self.config.device_name])
-      _snapshot = _InsertablePlaylistSnapshot2.upgrade(s, map=intern_map, device_name=self.config.device_name)
+      _snapshot = _InsertablePlaylistSnapshot2.upgrade(
+         s, map=intern_map, device_name=self.config.device_name
+      )
 
       self._add_playlist(epoch, _snapshot.playlist)
       self._add_channels(epoch, _snapshot.channels)
@@ -175,10 +179,11 @@ class ClientDatabase:
             "insert into string(value) values (?) "
             "on conflict (value) do update set value = value "
             "returning id",
-            strings
-         ).fetchall())
+            strings,
+         ).fetchall()
+      )
       handles = {}
-      for (s, row) in zip(strings, rows):
+      for s, row in zip(strings, rows):
          handles[s] = row[0]
       return handles
 
@@ -197,7 +202,7 @@ class ClientDatabase:
       self.conn.execute(
          "insert or ignore into playlist_at(epoch, playlist_id, device, ex) "
          "values (?, ?, ?, ?)",
-         (epoch, playlist.playlist_id, playlist.device_name, ex_id[0])
+         (epoch, playlist.playlist_id, playlist.device_name, ex_id[0]),
       )
 
    def _add_channels(self, epoch: int, channels: list[_InsertableChannel2]):
@@ -213,14 +218,16 @@ class ClientDatabase:
             # And that's how
             "on conflict (title) do update set title = title "
             "returning id",
-            ((channel.title,) for channel in channels)
+            ((channel.title,) for channel in channels),
          ).fetchall()
       )
 
       self.conn.executemany(
          "insert or ignore into channel_at(epoch, id, ex) values (?, ?, ?) ",
-         ((epoch, channel.channel_id, ex_id)
-            for channel, (ex_id,) in zip(channels, ex_ids))
+         (
+            (epoch, channel.channel_id, ex_id)
+            for channel, (ex_id,) in zip(channels, ex_ids)
+         ),
       )
 
    def _add_videos(self, epoch: int, videos: list[_InsertableVideo2]):
@@ -229,14 +236,13 @@ class ClientDatabase:
             "insert into video_ex(owner, title) values(?, ?) "
             "on conflict (owner, title) do update set title = title "
             "returning ex_id",
-            ((video.owner_id, video.title) for video in videos)
+            ((video.owner_id, video.title) for video in videos),
          ).fetchall()
       )
 
       self.conn.executemany(
          "insert or ignore into video_at(epoch, id, ex) values (?, ?, ?)",
-         ((epoch, video.video_id, ex_id)
-            for video, (ex_id,) in zip(videos, ex_ids))
+         ((epoch, video.video_id, ex_id) for video, (ex_id,) in zip(videos, ex_ids)),
       )
 
    def _add_playlist_items(self, epoch: int, items: list[_InsertablePlaylistItem2]):
@@ -252,6 +258,7 @@ class ClientDatabase:
          ((epoch, item.playlist_item_id, item.position) for item in items),
       )
 
+
 ################################################################################
 ## External API Structures (they closely match what the yt-api gives us!)
 class InsertablePlaylistSnapshot(t.NamedTuple):
@@ -259,13 +266,16 @@ class InsertablePlaylistSnapshot(t.NamedTuple):
    title: str
    desc: str
    items: list[InsertablePlaylistItem]
+
    def strings(self) -> list[str]:
       return [self.id, self.title, *(s for item in self.items for s in item.strings())]
+
 
 class InsertablePlaylistItem(t.NamedTuple):
    """
    Must be the same as parent InsertablePlaylistSnapshot
    """
+
    # PlaylistItem ids are globally unique across playlists and durable
    id: str
    playlist_id: str
@@ -277,6 +287,7 @@ class InsertablePlaylistItem(t.NamedTuple):
    video_owner_channel_id: str
    video_owner_channel_title: str
    position: int
+
    def strings(self) -> list[str]:
       return [
          self.id,
@@ -284,8 +295,9 @@ class InsertablePlaylistItem(t.NamedTuple):
          self.video_id,
          self.video_title,
          self.video_owner_channel_id,
-         self.video_owner_channel_title
+         self.video_owner_channel_title,
       ]
+
 
 ################################################################################
 ## Internal API Structures
@@ -295,13 +307,17 @@ class InsertablePlaylistItem(t.NamedTuple):
 StringHandle: t.TypeAlias = int
 StringInternMap: t.TypeAlias = dict[str, StringHandle]
 
+
 class _InsertablePlaylistSnapshot2(t.NamedTuple):
    playlist: _InsertablePlaylist2
    channels: list[_InsertableChannel2]
    videos: list[_InsertableVideo2]
    items: list[_InsertablePlaylistItem2]
+
    @staticmethod
-   def upgrade(a: InsertablePlaylistSnapshot, map: StringInternMap, device_name: str) -> _InsertablePlaylistSnapshot2:
+   def upgrade(
+      a: InsertablePlaylistSnapshot, map: StringInternMap, device_name: str
+   ) -> _InsertablePlaylistSnapshot2:
       return _InsertablePlaylistSnapshot2(
          playlist=_InsertablePlaylist2(
             playlist_id=map[a.id],
@@ -314,14 +330,16 @@ class _InsertablePlaylistSnapshot2(t.NamedTuple):
             _InsertableChannel2(
                channel_id=map[item.video_owner_channel_id],
                title=map[item.video_owner_channel_title],
-            ) for item in a.items
+            )
+            for item in a.items
          ],
          videos=[
             _InsertableVideo2(
                video_id=map[item.video_id],
                owner_id=map[item.video_owner_channel_id],
                title=map[item.video_title],
-            ) for item in a.items
+            )
+            for item in a.items
          ],
          items=[
             # This one should not contain duplicates though
@@ -329,31 +347,38 @@ class _InsertablePlaylistSnapshot2(t.NamedTuple):
                playlist_item_id=map[item.id],
                video_id=map[item.video_id],
                playlist_id=map[item.playlist_id],
-               position=item.position
-            ) for item in a.items
+               position=item.position,
+            )
+            for item in a.items
          ],
       )
+
 
 class _InsertablePlaylist2(t.NamedTuple):
    """
    Represents tables playlist_at & playlist_ex
    """
+
    playlist_id: StringHandle
    device_name: StringHandle
    title: StringHandle
    desc: StringHandle
 
+
 class _InsertableChannel2(t.NamedTuple):
    """
    Represents tables channel_at & channel_ex
    """
+
    channel_id: int
    title: int
+
 
 class _InsertableVideo2(t.NamedTuple):
    """
    Represents tables video_at & video_ex
    """
+
    video_id: StringHandle
    owner_id: StringHandle
    """
@@ -361,10 +386,12 @@ class _InsertableVideo2(t.NamedTuple):
    """
    title: StringHandle
 
+
 class _InsertablePlaylistItem2(t.NamedTuple):
    """
    Represents tables playlist_item & playlist_ex
    """
+
    # Worth commenting on the Hungarian Notation here.
    # InsertablePlaylistItem has id
    # table playlist_item_at has id
@@ -376,6 +403,7 @@ class _InsertablePlaylistItem2(t.NamedTuple):
    video_id: StringHandle
    playlist_id: StringHandle
    position: int
+
 
 class ClientDatabaseOnDisk(ClientDatabase):
    def __init__(self, path: str, config: config.ClientConfig):
