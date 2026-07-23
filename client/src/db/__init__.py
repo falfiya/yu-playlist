@@ -7,7 +7,7 @@ from pathlib import Path
 import apsw
 import apsw.bestpractice
 import pydantic as p
-import zstd
+import compression.zstd as zstd
 import time
 import config
 
@@ -69,15 +69,11 @@ class ClientDatabase:
    Opens the database, runs migration, and hooks up Python bindings
    """
 
-   def __init__(self, *, path: str, config: config.ClientConfig):
+   def __init__(self, *, conn: apsw.Connection, config: config.ClientConfig):
+      self.conn = conn
       self.config = config
-      self.f = open(path, "r+b")
-      raw = self.f.read()
-      self.conn = apsw.Connection(":memory:")
-      if len(raw) != 0:
-         decoded = zstd.decode(raw)
-         self.conn.deserialize("main", decoded)
-      self.conn.execute(INIT)
+
+      conn.execute(INIT)
       self.__run_migrations()
 
    def close(self):
@@ -380,3 +376,23 @@ class _InsertablePlaylistItem2(t.NamedTuple):
    video_id: StringHandle
    playlist_id: StringHandle
    position: int
+
+class ClientDatabaseOnDisk(ClientDatabase):
+   def __init__(self, path: str, config: config.ClientConfig):
+      self._file_handle = open(path, "r+b")
+      raw = self._file_handle.read()
+      conn = apsw.Connection(":memory:")
+      if len(raw) != 0:
+         decoded = zstd.decompress(raw)
+         conn.deserialize("main", decoded)
+
+      super().__init__(conn=conn, config=config)
+
+   def close(self):
+      db_bytes = self.conn.serialize("main")
+      zstd_bytes = zstd.compress(db_bytes)
+      super().close()
+      self._file_handle.seek(0)
+      self._file_handle.write(zstd_bytes)
+      self._file_handle.truncate()
+      self._file_handle.close()

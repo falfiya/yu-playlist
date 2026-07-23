@@ -4,3 +4,4 @@ oauth2_callback_port = 0
 # - client_secret_xxxxxxx.json
 # - token.json
 secrets_path = "secrets"
+device_name = "unknown-device"

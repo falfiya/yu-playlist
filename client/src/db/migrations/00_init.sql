@@ -3,8 +3,8 @@ create table string(
    S integer primary key,
    value text unique
 ) strict;
-insert into string(id, value) values (0, null);
-insert into string(id, value) values (1, '');
+insert into string(S, value) values (0, null);
+insert into string(S, value) values (1, '');
 
 -- 2. Ensure the playlist item exists
 create table playlist_item(
@@ -35,7 +35,7 @@ create table playlist_item_at(
    epoch integer not null,
    playlist_item_id integer references playlist_item(id),
    position integer not null,
-   primary key (epoch, playlist_item_id),
+   primary key (epoch, playlist_item_id)
    -- foreign key (epoch,
    --    (select playlist_id from playlist_item where id = playlist_item_id))
    -- references playlist_item(epoch, playlist_id)
