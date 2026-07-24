@@ -1,5 +1,5 @@
 run:
-	uv run src/main.py
+	uv run src/main.py -D 
 
 test:
 	uv run pytest --cov=src --cov-report=html

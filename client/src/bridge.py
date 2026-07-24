@@ -14,28 +14,6 @@ import log as l
 from pathvalidate import sanitize_filename
 from functools import cached_property
 
-# class TextPlaylistItem:
-#    @staticmethod
-#    def from_yt(source: yt.PlaylistItem):
-#       title = source.title
-#       title = u.truncate(title, max_len=40)
-#       channel_title: t.Optional[str] = source.channel_title
-#       if channel_title is not None:
-#          if channel_title.endswith(" - Topic"):
-#             channel_title = channel_title[: -len(" - Topic")]
-#          channel_title = u.truncate(channel_title, max_len=20)
-
-#       video_id = source.video_id
-#       smol_hash = u.smol_hash(source.id)
-
-#       return TextPlaylistItem(
-#          title=title,
-#          channel_title=channel_title,
-#          video_id=video_id,
-#          smol_hash_playlist_item_id=smol_hash,
-#          above_comment=[],
-#          inline_comment=""
-#       )
 
 
 class Playlist:
