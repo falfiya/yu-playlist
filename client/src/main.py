@@ -1,26 +1,66 @@
 import argparse
+import shutil
+from pathlib import Path
 
 import colorama as c
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.shortcuts import choice
+from prompt_toolkit.shortcuts import choice, message_dialog, yes_no_dialog
 
 import bridge
-import log as l
+from config import ClientConfig
+from log import Logging
+import sys
 
 assert __name__ == "__main__", "You must invoke this as a script"
 
-parser = argparse.ArgumentParser(
-   prog="yu-playlist",
-   description="TUI for managing YouTube Playlists",
-   epilog="and thats how you use the program. thank you for coming to my ted talk",
-)
-parser.add_argument("directory", required=True, help="The directory where playlists are stored")
+################################################################################
+## Command Line Parsing
 class ClientArguments:
    directory: str
 
-args = ClientArguments()
-parser.parse_args(namespace=args)
+
+
+parser = argparse.ArgumentParser(
+   prog="yu-playlist",
+   description="CLI and TUI for managing YouTube Playlists",
+   epilog="and thats how you use the program. thank you for coming to my ted talk",
+)
+parser.add_argument("directory", help="The directory where playlists are stored")
+if len(sys.argv) < 2:
+   parser.print_help()
+   exit()
+options = ClientArguments()
+parser.parse_args(namespace=options)
+
+################################################################################
+## Loading the config file
+config_path = Path(options.directory) / "yu-playlist.toml"
+try:
+   config_file = open(config_path, "r")
+except FileNotFoundError:
+   copy_default_config_file = yes_no_dialog(
+      title="Config file missing!",
+      text=(
+         f"I looked for a config file at {config_path.absolute()} but I couldn't find one. "
+         "Do you want me to make one for you?"
+      ),
+   ).run()
+   if copy_default_config_file:
+      default_config_path = Path(__file__).parent / "config.default.toml"
+      shutil.copyfile(default_config_path, config_path)
+      message_dialog(
+         title="All done :3",
+         text="I created the config file. Please be sure to edit it.",
+      )
+      quit(0)
+   else:
+      exit(1)
+config = ClientConfig.from_file(config_file)
+
+################################################################################
+## The Meat
+l = Logging(config)
 
 
 def specific(fn):
@@ -105,25 +145,55 @@ def reset(p: bridge.Playlist):
 
 
 print(
-   f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the command-line interface for yu-playlist!"
+   f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the textual user interface for yu-playlist!"
 )
 
 try:
    what_to_do = choice(
       message="How do you want to start?",
       options=[
-         ("specific(analyze)", "Specific analysis"),
-         ("full(analyze)", "Full     analysis"),
-         ("specific(ingest)", "Specific ingest"),
-         ("full(ingest)", "Full     ingest"),
-         ("specific(push)", "Specific push"),
-         ("full(reset)", "Full     reset to match YouTube"),
-         ("specific(reset)", "Specific reset to match YouTube"),
+         ("diff" , "diff: Displays the difference between local and remote"),
+         ("pull" , "pull: Pulls new additions and deletions from remote"),
+         ("push" , "push: Enforces the local order on the remote"),
+         ("reset", "reset: Discards all local changes and resets to the remote"),
       ],
-      default="specific_analysis",
+      default="diff",
    )
 except KeyboardInterrupt:
    l.error("Interrupt")
    exit()
 
-eval(what_to_do)
+# TODO: Read all local playlist files
+match what_to_do:
+   case "diff":
+      # TODO:
+      # From the local perspective
+      # New items from the remote should be marked as + with green.
+      # Items that were removed on the remote should be marked as - with red.
+      # To achieve this, first read the textual playlist.
+      # Using the database, immediately convert back from smol_hash to playlist item ids.
+      # In fact, reading the textual playlist requires that the database be present.
+      # LATER: you may handle the case where the database is corrupted,
+      #        and allow a complete ingest of all youtube playlists to put a
+      #        playlist id to there. You may make a new option called "doctor"
+      # Continuing:
+      # Perform a left set difference and right set difference between the local
+      # playlist items and the remote playlist items.
+      # Since we are not stateful, I believe all of the diffing can be cached.
+      # (Though when would we need it twice?)
+      ...
+   case "pull":
+      # TODO:
+      # Use the above diffing code somehow.
+      # When an item is removed on the remote, comment it out in the textual playlist.
+      ...
+   case "push":
+      # This requires pulling anyways.
+      # Additionally, do that cursed least moves algo.
+      ...
+   case "reset":
+      # Ask a confirmation from the user.
+      # Do you really want to hard reset? Any playlist items and comments you had will be lost.
+      ...
+   case _:
+      raise ValueError("SANITY: The choice was invalid!")

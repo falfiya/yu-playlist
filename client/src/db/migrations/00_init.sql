@@ -35,6 +35,7 @@ create table playlist_item_at(
    epoch integer not null,
    playlist_item_id integer references playlist_item(id),
    position integer not null,
+   smol_hash text not null,
    primary key (epoch, playlist_item_id)
    -- foreign key (epoch,
    --    (select playlist_id from playlist_item where id = playlist_item_id))
