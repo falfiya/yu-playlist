@@ -11,6 +11,7 @@ import apsw.bestpractice
 import pydantic as p
 
 import config
+from common import PlaylistId, PlaylistItemId, VideoId, ChannelId
 
 apsw.bestpractice.apply(apsw.bestpractice.recommended)
 
@@ -262,7 +263,7 @@ class ClientDatabase:
 ################################################################################
 ## External API Structures (they closely match what the yt-api gives us!)
 class InsertablePlaylistSnapshot(t.NamedTuple):
-   id: str
+   id: PlaylistId
    title: str
    desc: str
    items: list[InsertablePlaylistItem]
@@ -277,14 +278,14 @@ class InsertablePlaylistItem(t.NamedTuple):
    """
 
    # PlaylistItem ids are globally unique across playlists and durable
-   id: str
-   playlist_id: str
+   id: PlaylistItemId
+   playlist_id: PlaylistId
    """
    Must be the same as parent InsertablePlaylistSnapshot
    """
-   video_id: str
+   video_id: VideoId
    video_title: str
-   video_owner_channel_id: str
+   video_owner_channel_id: ChannelId
    video_owner_channel_title: str
    position: int
 

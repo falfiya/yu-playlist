@@ -9,11 +9,12 @@ from google.oauth2.credentials import Credentials
 if t.TYPE_CHECKING:
    import googleapiclient._apis.youtube.v3 as YT
 
+import pydantic as p
+
 import util as u
+from common import ChannelId, PlaylistId, PlaylistItemId, VideoId
 from config import ClientConfig
 from log import Logging
-
-import pydantic as p
 
 missing_client_secrets = """
 You are missing a client secret file.
@@ -195,12 +196,12 @@ class Thumbnails(p.BaseModel):
 
 
 class PlaylistItem(p.BaseModel):
-   id: str
+   id: PlaylistItemId
    title: str
    position: int
-   playlist_id: str
-   video_id: str
-   channel_id: str
+   playlist_id: PlaylistId
+   video_id: VideoId
+   channel_id: ChannelId
    channel_title: t.Optional[str]
 
    @staticmethod
@@ -222,10 +223,10 @@ class PlaylistItem(p.BaseModel):
 
 
 class Playlist(p.BaseModel):
-   id: str
+   id: PlaylistId
    length: int
    published_at: str
-   channel_id: str
+   channel_id: ChannelId
    channel_title: str
    title: str
    desc: str
