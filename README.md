@@ -11,8 +11,8 @@
 "playlist.id"
 00000.0000
 // Comments can be added on top of each track
-["Rich Man"  , "aespa"       , "WAQ5_7YFAVo", "73PNDXNHGL"] // or inline if you want
-["Aris Rage" , "BasedMonster", "zbsbcKfqtSQ", "PTZI4WR47P"]
+  ["Rich Man"  , "aespa"       , "WAQ5_7YFAVo", "73PNDXNHGL"] // or inline if you want
+  ["Aris Rage" , "BasedMonster", "zbsbcKfqtSQ", "PTZI4WR47P"]
 ```
 
 1. Follow [these instructions](https://developers.google.com/youtube/v3/getting-started) to obtain a `client_secret_xxxxxxx.json`.

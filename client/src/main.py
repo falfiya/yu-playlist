@@ -1,16 +1,23 @@
 import argparse
+import os
 import shutil
+import sys
 from pathlib import Path
+import typing as t
 
 import colorama as c
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import choice, message_dialog, yes_no_dialog
 
-import bridge
+from common import ChannelId, PlaylistId, PlaylistItemId, VideoId
 from config import ClientConfig
+from db import ClientDatabaseOnDisk, FetchablePlaylistItemId
 from log import Logging
-import sys
+from textual import TextPlaylist
+from yt import YouTube, Playlist
+import datetime
+from time import time
 
 assert __name__ == "__main__", "You must invoke this as a script"
 
@@ -18,8 +25,6 @@ assert __name__ == "__main__", "You must invoke this as a script"
 ## Command Line Parsing
 class ClientArguments:
    directory: str
-
-
 
 parser = argparse.ArgumentParser(
    prog="yu-playlist",
@@ -33,9 +38,11 @@ if len(sys.argv) < 2:
 options = ClientArguments()
 parser.parse_args(namespace=options)
 
+base = Path(options.directory)
+
 ################################################################################
 ## Loading the config file
-config_path = Path(options.directory) / "yu-playlist.toml"
+config_path = base / "yu-playlist.toml"
 try:
    config_file = open(config_path, "r")
 except FileNotFoundError:
@@ -60,140 +67,164 @@ config = ClientConfig.from_file(config_file)
 
 ################################################################################
 ## The Meat
+os.chdir(base)
 l = Logging(config)
+db = ClientDatabaseOnDisk("yu-playlist.sqlite3", config)
 
+class YuPlaylistTUI:
+   """
+   The TUI is stateful and caches as much information as possible
+   """
+   seen_playlist_titles: dict[PlaylistId, str] = {}
+   local_playlists: dict[PlaylistId, TextPlaylist] = {}
+   local_playlist_items: dict[PlaylistId, list[PlaylistItemId]] = {}
 
-def specific(fn):
-   filenames = bridge.my_playlist_files()
-   for t in filenames:
-      print(f" - {t}")
+   _yt: t.Optional[YouTube] = None
 
-   try:
-      title = prompt(
-         "> ", completer=WordCompleter(filenames, ignore_case=True, match_middle=True)
+   def __init__(self):
+      for p in os.listdir("."):
+         if not p.endswith(".jsonl"):
+            continue
+         # Could add some logic for verify the playlist filename matches the id but...
+         f = open(p, "r")
+         text_playlist = TextPlaylist.from_str(f.readlines(), l)
+         self.seen_playlist_titles[text_playlist.id] = text_playlist.title
+         self.local_playlists[text_playlist.id] = text_playlist
+         self.local_playlist_items[text_playlist.id] = db.get_playlist_item_ids([
+            FetchablePlaylistItemId(video_id=item.video_id, smol_hash=item.smol_hash_playlist_item_id)
+            for item in text_playlist.items
+         ])
+      self.main_loop()
+
+   def main_loop(self):
+      """
+      All functions prefixed with main interact directly with the user through TUI.
+      """
+
+      print(
+         f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the textual user interface for yu-playlist!"
       )
-   except KeyboardInterrupt:
-      l.error("Interrupt")
-      exit()
-   filename = filenames[filenames.index(title)]
-   fn(bridge.get_playlist_offline(filename))
+      message = "How do you want to start?"
+      while True:
+         what_to_do = choice(
+            message=message,
+            options=[
+               ("diff" , "diff: Displays the difference between local and remote"),
+               ("pull" , "pull: Pulls new additions and deletions from remote"),
+               ("push" , "push: Enforces the local order on the remote"),
+               ("reset", "reset: Discards all local changes and resets to the remote"),
+            ],
+            default="diff",
+         )
+         message = "Please pick an option."
+         match what_to_do:
+            case "diff":
+               self.main_diff()
+            case "pull":
+               self.main_pull()
+               ...
+            case "push":
+               self.main_push()
+            case "reset":
+               self.main_reset()
+            case _:
+               raise ValueError("SANITY: The choice was invalid!")
 
+   def main_diff(self):
+      pid = choice(
+         message=
+            "Choose a playlist to fetch\n"
+            "Use ... for playlists not known locally\n",
+         options=[
+            ("cancel", "Cancel"),
+            ("...", "..."),
+            *self.seen_playlist_titles.items(),
+         ],
+      )
+      if pid == "...":
+         _ = self.remote_playlists() # fetch all remote playlists and add them to seen_playlist_titles
+         pid = choice(
+            message=
+               "Choose a playlist to fetch\n"
+               "Use ... for playlists not known locally\n",
+            options=[
+               ("cancel", "Cancel"),
+               *self.seen_playlist_titles.items(),
+            ],
+         )
+      if pid == "cancel":
+         return
 
-def full(fn):
-   filenames = bridge.my_playlists_online()
-   for p in filenames:
-      fn(p)
-   l.info(f"Processed {len(filenames)} playlists!")
-
-
-def analyze(p: bridge.Playlist):
-   group_started = [False]
-
-   def group():
-      if not group_started[0]:
-         l.info(p.yt_playlist.title)
-         l.group_start()
-         group_started[0] = True
-
-   if len(p.missing_from_yt) > 0:
-      group()
-      l.warn("Local Extra (Please Remove These)")
-      l.group_start()
-      for extra in p.missing_from_yt:
-         l.info(extra)
-      l.group_end()
-
-   if len(p.missing_from_shadow) > 0:
-      group()
-      l.warn("Local Missing:")
-      l.group_start()
-      for missing in p.missing_from_shadow:
-         l.info(missing)
-      l.group_end()
-
-   if p.diff_ok:
-      if len(p.ooo) > 0:
-         group()
-         l.warn("Out-of-order:")
-         l.group_start()
-         for ooo in p.ooo:
-            l.warn(ooo)
-         l.group_end()
-   else:
-      l.warn("Refusing to calculate out-of-order items.")
-
-   if group_started[0]:
-      l.group_end()
-
-
-def ingest(p: bridge.Playlist):
-   l.info(f"Ingest {p.shadow_file_object.title}")
-   l.group_start()
-   p.ingest_new_yt()
-   l.group_end()
-
-
-def push(p: bridge.Playlist):
-   p.push()
-
-
-def reset(p: bridge.Playlist):
-   l.info(f"Reset {p.shadow_file_object.title}")
-   l.group_start()
-   p.reset_to_yt()
-   l.group_end()
-
-
-print(
-   f"{c.ansi.CSI}2J{c.ansi.CSI}H Welcome to the textual user interface for yu-playlist!"
-)
-
-try:
-   what_to_do = choice(
-      message="How do you want to start?",
-      options=[
-         ("diff" , "diff: Displays the difference between local and remote"),
-         ("pull" , "pull: Pulls new additions and deletions from remote"),
-         ("push" , "push: Enforces the local order on the remote"),
-         ("reset", "reset: Discards all local changes and resets to the remote"),
-      ],
-      default="diff",
-   )
-except KeyboardInterrupt:
-   l.error("Interrupt")
-   exit()
-
-# TODO: Read all local playlist files
-match what_to_do:
-   case "diff":
+      diff = self.diff(pid)
       # TODO:
+      # Display the results of the diff
+
+   def main_pull(self):
+      # TODO:
+      # Use the above diffing code somehow.
+      # When an item is removed on the remote, comment it out in the textual playlist.
+      ...
+
+   def main_push(self):
+      # Requires pulling and therefore diffing and therefore the least moves algo
+      ...
+
+   def main_reset(self):
+      # Ask a confirmation from the user.
+      # Do you really want to hard reset? Any playlist items and comments you had will be lost.
+      ...
+
+   def main_doctor(self):
+      # If the database is missing or corrupted there's no way to handle the smol_hashes!
+      raise NotImplementedError()
+
+   def yt(self) -> YouTube:
+      if self._yt is None:
+         self._yt = YouTube(config, l)
+      return self._yt
+
+   _diff_epoch: dict[PlaylistId, int]
+   _diff_cache: dict[PlaylistId, PlaylistDiff]
+   def diff(self, id: PlaylistId) -> PlaylistDiff:
       # From the local perspective
       # New items from the remote should be marked as + with green.
       # Items that were removed on the remote should be marked as - with red.
       # To achieve this, first read the textual playlist.
       # Using the database, immediately convert back from smol_hash to playlist item ids.
       # In fact, reading the textual playlist requires that the database be present.
-      # LATER: you may handle the case where the database is corrupted,
-      #        and allow a complete ingest of all youtube playlists to put a
-      #        playlist id to there. You may make a new option called "doctor"
+
       # Continuing:
       # Perform a left set difference and right set difference between the local
       # playlist items and the remote playlist items.
-      # Since we are not stateful, I believe all of the diffing can be cached.
-      # (Though when would we need it twice?)
-      ...
-   case "pull":
-      # TODO:
-      # Use the above diffing code somehow.
-      # When an item is removed on the remote, comment it out in the textual playlist.
-      ...
-   case "push":
-      # This requires pulling anyways.
-      # Additionally, do that cursed least moves algo.
-      ...
-   case "reset":
-      # Ask a confirmation from the user.
-      # Do you really want to hard reset? Any playlist items and comments you had will be lost.
-      ...
-   case _:
-      raise ValueError("SANITY: The choice was invalid!")
+      raise NotImplementedError()
+
+   _remote_playlists_epoch: float = 0
+   _remote_playlists: t.Optional[list[Playlist]] = None
+   def remote_playlists(self) -> list[Playlist]:
+      if self._outdated(self._remote_playlists, self._remote_playlists):
+         self._remote_playlists = self.yt().my_playlists()
+         self._remote_playlists_epoch = time()
+         for p in self._remote_playlists:
+            self.seen_playlist_titles[p.id] = p.title
+      return self._remote_playlists # type: ignore
+
+   def _outdated(self, value, epoch):
+      """
+      Determine whether a certain cached value is outdated.
+      Ask the user if she wants to fetch when not sure.
+      """
+      if value is None:
+         return True
+      else:
+         # TODO if more than 3 minutes old, ask the user if she wants to fetch
+         # TODO if more than 30 minutes old, fetch always
+         ...
+
+class PlaylistDiff(t.NamedTuple):
+   ...
+
+try:
+   YuPlaylistTUI()
+except KeyboardInterrupt:
+   l.error("Interrupt")
+   exit()

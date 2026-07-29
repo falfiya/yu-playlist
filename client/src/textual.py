@@ -9,6 +9,7 @@ import typing as t
 import pydantic as p
 
 import util as u
+from common import ChannelId, PlaylistId, PlaylistItemId, VideoId
 from log import Logging
 
 
@@ -19,18 +20,15 @@ class TextPlaylist(p.BaseModel):
    "Playlist Title"                                      // inline_comments[0]
                                                          // overline_comments[1]
    "playlist.id"                                         // inline_comments[1]
-                                                         // overline_comments[2]
-   00000.0000                                            // inline_comments[2]
      ["Rich Man"  , "aespa"       , "WAQ5_7YFAVo", "73PNDXNHGL"]
      ["Aris Rage" , "BasedMonster", "zbsbcKfqtSQ", "PTZI4WR47P"]
    </pre>
    """
 
-   id: str
+   id: PlaylistId
    title: str
-   last_jsonl_time: t.Any
-   overline_comments: tuple[list[str], list[str], list[str]]
-   inline_comments: tuple[str, str, str]
+   overline_comments: tuple[list[str], list[str]]
+   inline_comments: tuple[str, str]
    items: list[TextPlaylistItem]
    trailing_comments: list[str]
 
@@ -45,9 +43,6 @@ class TextPlaylist(p.BaseModel):
       overline_comments[1], lines = u.head_comments(lines)
       id, inline_comments[1] = u.deserialize_raw(lines.pop(0))
 
-      overline_comments[2], lines = u.head_comments(lines)
-      last_jsonl_time, inline_comments[2] = u.deserialize_raw(lines.pop(0))
-
       items: list[TextPlaylistItem] = []
       trailing_comments = []
       while len(lines) > 0:
@@ -61,7 +56,6 @@ class TextPlaylist(p.BaseModel):
       return TextPlaylist(
          id=id,
          title=title,
-         last_jsonl_time=last_jsonl_time,
          overline_comments=overline_comments,  # type: ignore coerce
          inline_comments=inline_comments,  # type: ignore coerce
          items=items,
@@ -75,8 +69,6 @@ class TextPlaylist(p.BaseModel):
       jsonl_out += u.serialize(self.title) + self.inline_comments[0] + "\n"
       jsonl_out += "\n".join(self.overline_comments[1]) + "\n"
       jsonl_out += u.serialize(self.id) + self.inline_comments[1] + "\n"
-      jsonl_out += "\n".join(self.overline_comments[2]) + "\n"
-      jsonl_out += u.serialize(this_jsonl_time) + self.inline_comments[2] + "\n"
 
       cols: tuple[list[str], list[str], list[str], list[str]] = ([], [], [], [])
       for i in self.items:
@@ -102,7 +94,7 @@ class TextPlaylist(p.BaseModel):
 class TextPlaylistItem(p.BaseModel):
    title: str
    channel_title: t.Optional[str]
-   video_id: str
+   video_id: VideoId
    smol_hash_playlist_item_id: str
    above_comment: list[str]
    inline_comment: str
