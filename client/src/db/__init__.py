@@ -11,7 +11,7 @@ import apsw.bestpractice
 import pydantic as p
 
 import config
-from common import PlaylistId, PlaylistItemId, VideoId, ChannelId
+from common import ChannelId, PlaylistId, PlaylistItemId, VideoId
 
 apsw.bestpractice.apply(apsw.bestpractice.recommended)
 
@@ -97,6 +97,29 @@ class ClientDatabase:
       self._add_playlist_items(epoch, _snapshot.items)
       self.conn.execute("end transaction")
 
+   def get_playlist_item_ids(self, items: list[FetchablePlaylistItemId]) -> list[PlaylistItemId]:
+      self.conn.execute("begin transaction")
+      intern_map = self._get_strings([s for item in items for s in item.strings()])
+      items2: list[_FetchablePlaylistItemId2] = []
+      for item in items:
+         items2.append(
+            _FetchablePlaylistItemId2(
+               video_id=intern_map[item.video_id],
+               smol_hash=intern_map[item.smol_hash],
+            )
+         )
+      # Rather than doing a roundtrip
+      rows = p.TypeAdapter(list[tuple[str]]).validate_python(
+            self.conn.executemany(
+            "select string.value from playlist_item as pi "
+            "join string on string.S = pi.id "
+            "where pi.video_id = ? and pi.smol_hash = ?",
+            ((item2.video_id, item2.smol_hash) for item2 in items2),
+         )
+      )
+      self.conn.execute("end transaction")
+      return [id for (id,) in rows]
+
    def __run_migrations(self):
       """
       Migrations are written as migrations/00_name.sql and must increase
@@ -174,12 +197,23 @@ class ClientDatabase:
          else:
             raise AssertionError(f"Missing migration {id}")
 
+   def _get_strings(self, strings: list[str]) -> StringInternMap:
+      rows = p.TypeAdapter(list[tuple[int]]).validate_python(
+         self.conn.executemany(
+            "select S from string where value = ?", strings
+         ).fetchall()
+      )
+      handles = {}
+      for s, row in zip(strings, rows):
+         handles[s] = row[0]
+      return handles
+
    def _add_strings(self, strings: list[str]) -> StringInternMap:
       rows = p.TypeAdapter(list[tuple[int]]).validate_python(
          self.conn.executemany(
             "insert into string(value) values (?) "
             "on conflict (value) do update set value = value "
-            "returning id",
+            "returning S",
             strings,
          ).fetchall()
       )
@@ -300,6 +334,14 @@ class InsertablePlaylistItem(t.NamedTuple):
       ]
 
 
+class FetchablePlaylistItemId(t.NamedTuple):
+   video_id: VideoId
+   smol_hash: str
+
+   def strings(self) -> list[str]:
+      return [self.video_id, self.smol_hash]
+
+
 ################################################################################
 ## Internal API Structures
 # These more closely match what's going on in the database.
@@ -404,6 +446,11 @@ class _InsertablePlaylistItem2(t.NamedTuple):
    video_id: StringHandle
    playlist_id: StringHandle
    position: int
+
+
+class _FetchablePlaylistItemId2(t.NamedTuple):
+   video_id: StringHandle
+   smol_hash: StringHandle
 
 
 class ClientDatabaseOnDisk(ClientDatabase):

@@ -13,8 +13,13 @@ create table playlist_item(
    -- and the video never changes for that item.
    video_id integer references string(S),
    -- Nor does the playlist it belongs to
-   playlist_id integer references string(S)
+   playlist_id integer references string(S),
+   -- This is a lossy representation of the playlist_item_id but together with
+   -- the video_id, it should be sufficient to match one to one
+   smol_hash integer references string(S)
 ) strict;
+
+create index smol_hash_lookup on playlist_item(video_id, smol_hash);
 
 -- 3. Take a Snapshot
 --------------------------------------------------------------------------------
@@ -35,7 +40,6 @@ create table playlist_item_at(
    epoch integer not null,
    playlist_item_id integer references playlist_item(id),
    position integer not null,
-   smol_hash text not null,
    primary key (epoch, playlist_item_id)
    -- foreign key (epoch,
    --    (select playlist_id from playlist_item where id = playlist_item_id))
