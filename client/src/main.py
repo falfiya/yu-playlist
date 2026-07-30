@@ -16,8 +16,9 @@ from db import ClientDatabaseOnDisk, FetchablePlaylistItemId
 from log import Logging
 from textual import TextPlaylist
 from yt import YouTube, Playlist
-import datetime
 from time import time
+import datetime
+from relative_datetime import DateTimeUtils
 
 assert __name__ == "__main__", "You must invoke this as a script"
 
@@ -201,14 +202,14 @@ class YuPlaylistTUI:
    _remote_playlists_epoch: float = 0
    _remote_playlists: t.Optional[list[Playlist]] = None
    def remote_playlists(self) -> list[Playlist]:
-      if self._outdated(self._remote_playlists, self._remote_playlists):
+      if self._outdated("remote playlists", self._remote_playlists, self._remote_playlists_epoch):
          self._remote_playlists = self.yt().my_playlists()
          self._remote_playlists_epoch = time()
          for p in self._remote_playlists:
             self.seen_playlist_titles[p.id] = p.title
       return self._remote_playlists # type: ignore
 
-   def _outdated(self, value, epoch):
+   def _outdated(self, friendly_name: str, value, epoch):
       """
       Determine whether a certain cached value is outdated.
       Ask the user if she wants to fetch when not sure.
@@ -216,9 +217,21 @@ class YuPlaylistTUI:
       if value is None:
          return True
       else:
-         # TODO if more than 3 minutes old, ask the user if she wants to fetch
-         # TODO if more than 30 minutes old, fetch always
-         ...
+         fetched_at = datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc)
+         relative_time, direction = DateTimeUtils.relative_datetime(fetched_at)
+         assert direction == "future", "SANITY: Cache was from the future!"
+
+         age = time() - epoch
+         if age > 30 * 60:
+            # more than 30 minutes old, fetch always
+            return True
+         if age > 3 * 60:
+            # more than 3 minutes old, ask the user if she wants to fetch
+            return yes_no_dialog(
+               title=f"{friendly_name} cache outdated",
+               text=f"Cached {friendly_name} was last fetched {relative_time} ago.\n Update it?",
+            )
+         return False
 
 class PlaylistDiff(t.NamedTuple):
    ...
