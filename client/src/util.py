@@ -122,9 +122,17 @@ def longest_increasing_subsequence(unsorted: list[int]) -> list[int]:
    return best_sublists[-1]
 
 
-def shortest_out_of_order_sublist(unsorted: list[int]) -> list[int]:
-   in_order = longest_increasing_subsequence(unsorted)
-   return [x for x in unsorted if x not in in_order]
+
+def shortest_out_of_order_sublist(
+   canonical_order: list[T], unsorted: list[T]
+) -> frozenset[T]:
+   """
+   T must implement T.__eq__(self, other: T) -> bool
+   """
+   in_order_indexes = longest_increasing_subsequence(
+      [canonical_order.index(item) for item in unsorted]
+   )
+   return frozenset(item for idx, item in enumerate(canonical_order) if idx not in in_order_indexes)
 
 
 def overwrite(f: t.Any, text: str):
